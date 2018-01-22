@@ -71,6 +71,9 @@ parser.add_argument(
     '--quiet', action='store_true', default=False,
     help='Don\'t be so verbose.')
 
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+
 
 def flip_augment(image, fid, pid):
     """ Returns both the original and the horizontal flip of an image. """
@@ -199,7 +202,7 @@ def main():
     with tf.name_scope('head'):
         endpoints = head.head(endpoints, args.embedding_dim, is_training=False)
 
-    with h5py.File(args.filename, 'w') as f_out, tf.Session() as sess:
+    with h5py.File(args.filename, 'w') as f_out, tf.Session(config=config) as sess:
         # Initialize the network/load the checkpoint.
         if args.checkpoint is None:
             checkpoint = tf.train.latest_checkpoint(args.experiment_root)
@@ -216,7 +219,7 @@ def main():
             try:
                 emb = sess.run(endpoints['emb'])
                 print('\rEmbedded batch {}-{}/{}'.format(
-                        start_idx, start_idx + len(emb), len(emb_storage)),
+                        start_idx, start_idx + len(emb), len(emb_storage)), 
                     flush=True, end='')
                 emb_storage[start_idx:start_idx + len(emb)] = emb
             except tf.errors.OutOfRangeError:

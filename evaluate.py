@@ -51,6 +51,9 @@ parser.add_argument(
     '--batch_size', default=256, type=common.positive_int,
     help='Batch size used during evaluation, adapt based on your memory usage.')
 
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+
 
 def main():
     # Verify that parameters are set correctly.
@@ -86,7 +89,7 @@ def main():
     # Loop over the query embeddings and compute their APs and the CMC curve.
     aps = []
     cmc = np.zeros(len(gallery_pids), dtype=np.int32)
-    with tf.Session() as sess:
+    with tf.Session(config=config) as sess:
         for start_idx in count(step=args.batch_size):
             try:
                 # Compute distance to all gallery embeddings

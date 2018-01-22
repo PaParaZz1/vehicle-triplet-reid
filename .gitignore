@@ -1,2 +1,8 @@
 __pycache__
+*.sw[a-z]
 *.pyc
+experiments/
+pretrained_models/
+venv/
+data/
+nets.bak/

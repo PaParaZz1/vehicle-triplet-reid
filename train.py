@@ -19,6 +19,8 @@ import loss
 from nets import NET_CHOICES
 from heads import HEAD_CHOICES
 
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
 
 parser = ArgumentParser(description='Train a ReID network.')
 
@@ -110,6 +112,14 @@ parser.add_argument(
     help='The initial value of the learning-rate, before it kicks in.')
 
 parser.add_argument(
+    '--lr_decay_factor', default=0.96, type=common.positive_float,
+    help='Learning rate decay factor')
+
+parser.add_argument(
+    '--lr_decay_steps', default=4000, type=common.positive_int,
+    help='Learning rate decay steps')
+
+parser.add_argument(
     '--train_iterations', default=25000, type=common.positive_int,
     help='Number of training iterations.')
 
@@ -117,6 +127,10 @@ parser.add_argument(
     '--decay_start_iteration', default=15000, type=int,
     help='At which iteration the learning-rate decay should kick-in.'
          'Set to -1 to disable decay completely.')
+
+parser.add_argument(
+    '--weight_decay_factor', default=0.001, type=common.positive_float,
+    help='Weight decay factor')
 
 parser.add_argument(
     '--checkpoint_frequency', default=1000, type=common.nonnegative_int,
@@ -337,7 +351,8 @@ def main():
         learning_rate = tf.train.exponential_decay(
             args.learning_rate,
             tf.maximum(0, global_step - args.decay_start_iteration),
-            args.train_iterations - args.decay_start_iteration, 0.001)
+            # args.train_iterations - args.decay_start_iteration, args.weight_decay_factor)
+            args.lr_decay_steps, args.lr_decay_factor, staircase=True)
     else:
         learning_rate = args.learning_rate
     tf.summary.scalar('learning_rate', learning_rate)
@@ -352,7 +367,7 @@ def main():
     # Define a saver for the complete model.
     checkpoint_saver = tf.train.Saver(max_to_keep=0)
 
-    with tf.Session() as sess:
+    with tf.Session(config=config) as sess:
         if args.resume:
             # In case we're resuming, simply load the full checkpoint to init.
             last_checkpoint = tf.train.latest_checkpoint(args.experiment_root)
