@@ -138,8 +138,12 @@ def load_dataset(csv_file, image_root, fail_on_missing=True):
                 fids = fids[np.logical_not(missing)]
                 pids = pids[np.logical_not(missing)]
                 models = models[np.logical_not(missing)]
+                # models = map(lambda x:int(x), models[np.logical_not(missing)])
                 colors = colors[np.logical_not(missing)]
+                # colors = map(lambda x:int(x), colors[np.logical_not(missing)])
 
+    models = list(map(lambda x:int(x), models))
+    colors = list(map(lambda x:int(x), colors))
     return pids, fids, models, colors
 
 

@@ -176,7 +176,7 @@ def sample_k_fids_for_pid(pid, all_models, all_colors, all_fids, all_pids, batch
     selected_models = tf.gather(possible_models, shuffled[:batch_k])
     selected_colors = tf.gather(possible_colors, shuffled[:batch_k])
 
-    return selected_model, selected_color, selected_fids, tf.fill([batch_k], pid)
+    return selected_models, selected_colors, selected_fids, tf.fill([batch_k], pid)
 
 
 def main():
@@ -271,18 +271,21 @@ def main():
     net_input_size = (args.net_input_height, args.net_input_width)
     pre_crop_size = (args.pre_crop_height, args.pre_crop_width)
     dataset = dataset.map(
-        lambda model, color, fid, pid: common.fid_to_image(
-            model, color, fid, pid, image_root=args.image_root,
+        lambda car_model, car_color, fid, pid: common.fid_to_image(
+            car_model, car_color, fid, pid, image_root=args.image_root,
             image_size=pre_crop_size if args.crop_augment else net_input_size),
         num_parallel_calls=args.loading_threads)
 
     # Augment the data if specified by the arguments.
     if args.flip_augment:
         dataset = dataset.map(
-            lambda im, model, color, fid, pid: (tf.image.random_flip_left_right(im), model, color, fid, pid))
+            lambda im, car_model, car_color, fid, pid: (tf.image.random_flip_left_right(im), car_model, car_color, fid, pid))
     if args.crop_augment:
         dataset = dataset.map(
-            lambda im, model, color, fid, pid: (tf.random_crop(im, net_input_size + (3,)), model, color, fid, pid))
+            lambda im, car_model, car_color, fid, pid: (tf.random_crop(im, net_input_size + (3,)), car_model, car_color, fid, pid))
+
+    dataset = dataset.map(
+            lambda im, car_model, car_color, fid, pid: (im, tf.one_hot(car_model, 1232), tf.one_hot(car_color, 11), fid, pid))
 
     # Group it back into PK batches.
     batch_size = args.batch_p * args.batch_k
@@ -292,10 +295,10 @@ def main():
     dataset = dataset.prefetch(1)
 
     # Since we repeat the data infinitely, we only need a one-shot iterator.
-    images, models, colors, fids, pids = dataset.make_one_shot_iterator().get_next()
+    images, car_models, car_colors, fids, pids = dataset.make_one_shot_iterator().get_next()
 
-    model_onehot = tf.one_hot(models, depth=)
-    color_onehot = tf.one_hot(colors, depth=)
+    # model_onehot = tf.one_hot(models, depth=1232)
+    # color_onehot = tf.one_hot(colors, depth=11)
 
     # Create the model and an embedding head.
     model = import_module('nets.' + args.model_name)
@@ -312,16 +315,24 @@ def main():
     # 1. Compute all pairwise distances according to the specified metric.
     # 2. For each anchor along the first dimension, compute its loss.
     dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
-    losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
+    triple_losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
         dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
 
+    model_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_models, logits=endpoints['model_logits'], weights=1.0)
+    color_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_colors, logits=endpoints['color_logits'], weights=1.0)
+
     # Count the number of active entries, and compute the total batch loss.
-    num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
-    loss_mean = tf.reduce_mean(losses)
+    num_active = tf.reduce_sum(tf.cast(tf.greater(triple_losses, 1e-5), tf.float32))
+    loss_mean = tf.reduce_mean(triple_losses)
+    
+    total_loss = loss_mean + model_cls_loss + color_cls_loss
 
     # Some logging for tensorboard.
-    tf.summary.histogram('loss_distribution', losses)
-    tf.summary.scalar('loss', loss_mean)
+    tf.summary.histogram('triple_loss_distribution', triple_losses)
+    tf.summary.scalar('triple_loss', loss_mean)
+    tf.summary.scalar('model_cls_loss', model_cls_loss)
+    tf.summary.scalar('color_cls_loss', color_cls_loss)
+    tf.summary.scalar('loss', total_loss)
     tf.summary.scalar('batch_top1', train_top1)
     tf.summary.scalar('batch_prec_at_{}'.format(args.batch_k-1), prec_at_k)
     tf.summary.scalar('active_count', num_active)
@@ -338,8 +349,14 @@ def main():
         log_embs = lb.create_or_resize_dat(
             os.path.join(args.experiment_root, 'embeddings'),
             dtype=np.float32, shape=(args.train_iterations, batch_size, args.embedding_dim))
-        log_loss = lb.create_or_resize_dat(
-            os.path.join(args.experiment_root, 'losses'),
+        log_triple_loss = lb.create_or_resize_dat(
+            os.path.join(args.experiment_root, 'triple_losses'),
+            dtype=np.float32, shape=(args.train_iterations, batch_size))
+        log_model_loss = lb.create_or_resize_dat(
+            os.path.join(args.experiment_root, 'model_cls_loss'),
+            dtype=np.float32, shape=(args.train_iterations, batch_size))
+        log_color_loss = lb.create_or_resize_dat(
+            os.path.join(args.experiment_root, 'color_cls_loss'),
             dtype=np.float32, shape=(args.train_iterations, batch_size))
         log_fids = lb.create_or_resize_dat(
             os.path.join(args.experiment_root, 'fids'),
@@ -369,7 +386,7 @@ def main():
 
     # Update_ops are used to update batchnorm stats.
     with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-        train_op = optimizer.minimize(loss_mean, global_step=global_step)
+        train_op = optimizer.minimize(total_loss, global_step=global_step)
 
     # Define a saver for the complete model.
     checkpoint_saver = tf.train.Saver(max_to_keep=0)
@@ -407,9 +424,9 @@ def main():
 
                 # Compute gradients, update weights, store logs!
                 start_time = time.time()
-                _, summary, step, b_prec_at_k, b_embs, b_loss, b_fids = \
+                _, summary, step, b_prec_at_k, b_embs, b_loss, b_fids, m_loss, c_loss = \
                     sess.run([train_op, merged_summary, global_step,
-                              prec_at_k, endpoints['emb'], losses, fids])
+                              prec_at_k, endpoints['emb'], triple_losses, fids, model_cls_loss, color_cls_loss])
                 elapsed_time = time.time() - start_time
 
                 # Compute the iteration speed and add it to the summary.
@@ -420,16 +437,18 @@ def main():
                 summary_writer.add_summary(summary, step)
 
                 if args.detailed_logs:
-                    log_embs[i], log_loss[i], log_fids[i] = b_embs, b_loss, b_fids
+                    log_embs[i], log_triple_loss[i], log_fids[i], log_model_loss[i], log_color_loss[i] = b_embs, b_loss, b_fids, m_loss, c_loss
 
                 # Do a huge print out of the current progress.
                 seconds_todo = (args.train_iterations - step) * elapsed_time
-                log.info('iter:{:6d}, loss min|avg|max: {:.3f}|{:.3f}|{:6.3f}, '
+                log.info('Iter:{:6d} | triple_loss min|avg|max: {:.3f}|{:.3f}|{:6.3f} | model_cls_loss: {:.3f} | color_cls_loss: {:.3f} | '
                          'batch-p@{}: {:.2%}, ETA: {} ({:.2f}s/it)'.format(
                              step,
                              float(np.min(b_loss)),
                              float(np.mean(b_loss)),
                              float(np.max(b_loss)),
+                             float(m_loss),
+                             float(c_loss),
                              args.batch_k-1, float(b_prec_at_k),
                              timedelta(seconds=int(seconds_todo)),
                              elapsed_time))
