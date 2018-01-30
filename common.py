@@ -117,7 +117,7 @@ def load_dataset(csv_file, image_root, fail_on_missing=True):
         IOError if any one file is missing and `fail_on_missing` is True.
     """
     dataset = np.genfromtxt(csv_file, delimiter=',', dtype='|U')
-    pids, fids = dataset.T
+    pids, fids, models, colors = dataset.T
 
     # Possibly check if all files exist
     if image_root is not None:
@@ -137,11 +137,13 @@ def load_dataset(csv_file, image_root, fail_on_missing=True):
                 # We simply remove the missing files.
                 fids = fids[np.logical_not(missing)]
                 pids = pids[np.logical_not(missing)]
+                models = models[np.logical_not(missing)]
+                colors = colors[np.logical_not(missing)]
 
-    return pids, fids
+    return pids, fids, models, colors
 
 
-def fid_to_image(fid, pid, image_root, image_size):
+def fid_to_image(model, color, fid, pid, image_root, image_size):
     """ Loads and resizes an image given by FID. Pass-through the PID. """
     # Since there is no symbolic path.join, we just add a '/' to be sure.
     image_encoded = tf.read_file(tf.reduce_join([image_root, '/', fid]))
@@ -154,7 +156,7 @@ def fid_to_image(fid, pid, image_root, image_size):
     image_decoded = tf.image.decode_jpeg(image_encoded, channels=3)
     image_resized = tf.image.resize_images(image_decoded, image_size)
 
-    return image_resized, fid, pid
+    return image_resized, model, color, fid, pid
 
 
 def get_logging_dict(name):

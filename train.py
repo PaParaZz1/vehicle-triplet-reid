@@ -156,9 +156,11 @@ parser.add_argument(
          ' Everything can be re-constructed and analyzed that way.')
 
 
-def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
+def sample_k_fids_for_pid(pid, all_models, all_colors, all_fids, all_pids, batch_k):
     """ Given a PID, select K FIDs of that specific PID. """
     possible_fids = tf.boolean_mask(all_fids, tf.equal(all_pids, pid))
+    possible_models = tf.boolean_mask(all_models, tf.equal(all_pids, pid))
+    possible_colors = tf.boolean_mask(all_colors, tf.equal(all_pids, pid))
 
     # The following simply uses a subset of K of the possible FIDs
     # if more than, or exactly K are available. Otherwise, we first
@@ -171,8 +173,10 @@ def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
     # Sampling is always performed by shuffling and taking the first k.
     shuffled = tf.random_shuffle(full_range)
     selected_fids = tf.gather(possible_fids, shuffled[:batch_k])
+    selected_models = tf.gather(possible_models, shuffled[:batch_k])
+    selected_colors = tf.gather(possible_colors, shuffled[:batch_k])
 
-    return selected_fids, tf.fill([batch_k], pid)
+    return selected_model, selected_color, selected_fids, tf.fill([batch_k], pid)
 
 
 def main():
@@ -242,7 +246,7 @@ def main():
         sys.exit(1)
 
     # Load the data from the CSV file.
-    pids, fids = common.load_dataset(args.train_set, args.image_root)
+    pids, fids, models, colors = common.load_dataset(args.train_set, args.image_root)
     max_fid_len = max(map(len, fids))  # We'll need this later for logfiles.
 
     # Setup a tf.Dataset where one "epoch" loops over all PIDS.
@@ -258,7 +262,7 @@ def main():
 
     # For every PID, get K images.
     dataset = dataset.map(lambda pid: sample_k_fids_for_pid(
-        pid, all_fids=fids, all_pids=pids, batch_k=args.batch_k))
+        pid, all_models=models, all_colors=colors, all_fids=fids, all_pids=pids, batch_k=args.batch_k))
 
     # Ungroup/flatten the batches for easy loading of the files.
     dataset = dataset.apply(tf.contrib.data.unbatch())
@@ -267,18 +271,18 @@ def main():
     net_input_size = (args.net_input_height, args.net_input_width)
     pre_crop_size = (args.pre_crop_height, args.pre_crop_width)
     dataset = dataset.map(
-        lambda fid, pid: common.fid_to_image(
-            fid, pid, image_root=args.image_root,
+        lambda model, color, fid, pid: common.fid_to_image(
+            model, color, fid, pid, image_root=args.image_root,
             image_size=pre_crop_size if args.crop_augment else net_input_size),
         num_parallel_calls=args.loading_threads)
 
     # Augment the data if specified by the arguments.
     if args.flip_augment:
         dataset = dataset.map(
-            lambda im, fid, pid: (tf.image.random_flip_left_right(im), fid, pid))
+            lambda im, model, color, fid, pid: (tf.image.random_flip_left_right(im), model, color, fid, pid))
     if args.crop_augment:
         dataset = dataset.map(
-            lambda im, fid, pid: (tf.random_crop(im, net_input_size + (3,)), fid, pid))
+            lambda im, model, color, fid, pid: (tf.random_crop(im, net_input_size + (3,)), model, color, fid, pid))
 
     # Group it back into PK batches.
     batch_size = args.batch_p * args.batch_k
@@ -288,7 +292,10 @@ def main():
     dataset = dataset.prefetch(1)
 
     # Since we repeat the data infinitely, we only need a one-shot iterator.
-    images, fids, pids = dataset.make_one_shot_iterator().get_next()
+    images, models, colors, fids, pids = dataset.make_one_shot_iterator().get_next()
+
+    model_onehot = tf.one_hot(models, depth=)
+    color_onehot = tf.one_hot(colors, depth=)
 
     # Create the model and an embedding head.
     model = import_module('nets.' + args.model_name)
