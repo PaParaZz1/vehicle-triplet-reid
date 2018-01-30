@@ -1,6 +1,6 @@
 #!/bin/sh
 
-epoch=220000
+epoch=250000
 dataset_size='small_'
 expr_dir='expr_inception_v4'
 # expr_dir='expr_resnet50_v2_50_1'
