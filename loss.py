@@ -27,6 +27,7 @@ def cdist(a, b, metric='euclidean'):
         - 'euclidean', although with a fudge-factor epsilon.
         - 'sqeuclidean', the squared euclidean.
         - 'cityblock', the manhattan or L1 distance.
+        - 'cosine', cosine similarity.
 
     Args:
         a (2D tensor): The left-hand side, shaped (B1, F).
@@ -43,20 +44,30 @@ def cdist(a, b, metric='euclidean'):
         undefined. Thus, it will never return exact zero in these cases.
     """
     with tf.name_scope("cdist"):
-        diffs = all_diffs(a, b)
-        if metric == 'sqeuclidean':
-            return tf.reduce_sum(tf.square(diffs), axis=-1)
-        elif metric == 'euclidean':
-            return tf.sqrt(tf.reduce_sum(tf.square(diffs), axis=-1) + 1e-12)
-        elif metric == 'cityblock':
-            return tf.reduce_sum(tf.abs(diffs), axis=-1)
+        if metric == 'cosine':
+            a_norm = a / tf.sqrt(tf.reduce_sum(tf.square(a), axis=1, keep_dims=True))
+            print('Normalized a: {}'.format(a_norm))
+            b_norm = b / tf.sqrt(tf.reduce_sum(tf.square(b), axis=1, keep_dims=True))
+            print('Normalized b: {}'.format(b_norm))
+            cosine_similarity = tf.matmul(a_norm, b_norm, transpose_b=True)
+            print('Cosine Similarity: {}'.format(cosine_similarity))
+            return 0.5 * (1 - cosine_similarity)
         else:
-            raise NotImplementedError(
-                'The following metric is not implemented by `cdist` yet: {}'.format(metric))
+            diffs = all_diffs(a, b)
+            if metric == 'sqeuclidean':
+                return tf.reduce_sum(tf.square(diffs), axis=-1)
+            elif metric == 'euclidean':
+                return tf.sqrt(tf.reduce_sum(tf.square(diffs), axis=-1) + 1e-12)
+            elif metric == 'cityblock':
+                return tf.reduce_sum(tf.abs(diffs), axis=-1)
+            else:
+                raise NotImplementedError(
+                    'The following metric is not implemented by `cdist` yet: {}'.format(metric))
 cdist.supported_metrics = [
     'euclidean',
     'sqeuclidean',
     'cityblock',
+    'cosine',
 ]
 
 

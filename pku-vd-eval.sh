@@ -1,6 +1,6 @@
 #!/bin/sh
 
-epoch=20000
+epoch=50000
 dataset_size='small_'
 # expr_dir='expr_inception_v4'
 expr_dir='expr_cls_supervised_resnet-50'

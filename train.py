@@ -112,6 +112,10 @@ parser.add_argument(
     help='The initial value of the learning-rate, before it kicks in.')
 
 parser.add_argument(
+    '--cls_loss_weight', default=1e-2, type=common.positive_float,
+    help='Weights of model classification loss and color classification loss')
+
+parser.add_argument(
     '--lr_decay_factor', default=0.96, type=common.positive_float,
     help='Learning rate decay factor')
 
@@ -325,7 +329,7 @@ def main():
     num_active = tf.reduce_sum(tf.cast(tf.greater(triple_losses, 1e-5), tf.float32))
     loss_mean = tf.reduce_mean(triple_losses)
     
-    total_loss = loss_mean + model_cls_loss + color_cls_loss
+    total_loss = loss_mean + (model_cls_loss + color_cls_loss) * args.cls_loss_weight
 
     # Some logging for tensorboard.
     tf.summary.histogram('triple_loss_distribution', triple_losses)

@@ -17,11 +17,11 @@ def head(endpoints, embedding_dim, is_training):
         weights_initializer=tf.orthogonal_initializer(), scope='emb')
 
     endpoints['model_logits'] = endpoints['model_raw'] = slim.fully_connected(
-        endpoints['head_output'], 1232, activation_fn=None,
+        endpoints['model_output'], 1232, activation_fn=None,
         weights_initializer=tf.orthogonal_initializer(), scope='model_cls')
 
     endpoints['color_logits'] = endpoints['color_raw'] = slim.fully_connected(
-        endpoints['head_output'], 11, activation_fn=None,
+        endpoints['model_output'], 11, activation_fn=None,
         weights_initializer=tf.orthogonal_initializer(), scope='color_cls')
 
     return endpoints

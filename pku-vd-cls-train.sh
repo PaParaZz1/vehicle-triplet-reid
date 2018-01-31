@@ -18,7 +18,7 @@
 IMAGE_ROOT=/home/qwang/Dataset/PKU-VD/VD1/ ; shift
 INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
 # INIT_CHECKPT=./pretrained_models/inception_v4.ckpt ; shift
-EXP_ROOT=./experiments/pku-vd/expr_cls_supervised_resnet-50 ; shift
+EXP_ROOT=./experiments/pku-vd/expr_cls_supervised_0.01_cosine_resnet-50 ; shift
 
 
 python train.py \
@@ -36,12 +36,13 @@ python train.py \
     --pre_crop_height 300 --pre_crop_width 300 \
     --net_input_height 224 --net_input_width 224 \
     --margin soft \
-    --metric euclidean \
+    --metric cosine \
     --loss batch_hard \
     --head_name fc1024_cls_supervised \
     --learning_rate 1e-4 \
     --train_iterations 400000 \
     --decay_start_iteration 10000 \
+    --cls_loss_weight 0.01 \
     --lr_decay_factor 0.96 \
     --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
