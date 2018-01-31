@@ -246,7 +246,7 @@ def main():
         sys.exit(1)
 
     # Load the data from the CSV file.
-    pids, fids, models, colors = common.load_dataset(args.train_set, args.image_root)
+    pids, fids, models, colors = common.load_dataset_cls(args.train_set, args.image_root)
     max_fid_len = max(map(len, fids))  # We'll need this later for logfiles.
 
     # Setup a tf.Dataset where one "epoch" loops over all PIDS.
@@ -271,7 +271,7 @@ def main():
     net_input_size = (args.net_input_height, args.net_input_width)
     pre_crop_size = (args.pre_crop_height, args.pre_crop_width)
     dataset = dataset.map(
-        lambda car_model, car_color, fid, pid: common.fid_to_image(
+        lambda car_model, car_color, fid, pid: common.fid_to_image_cls(
             car_model, car_color, fid, pid, image_root=args.image_root,
             image_size=pre_crop_size if args.crop_augment else net_input_size),
         num_parallel_calls=args.loading_threads)
