@@ -329,7 +329,7 @@ def main():
     num_active = tf.reduce_sum(tf.cast(tf.greater(triple_losses, 1e-5), tf.float32))
     loss_mean = tf.reduce_mean(triple_losses)
     
-    total_loss = loss_mean + (model_cls_loss + color_cls_loss) * args.cls_loss_weight
+    total_loss = 10 * loss_mean + (model_cls_loss + color_cls_loss) * args.cls_loss_weight
 
     # Some logging for tensorboard.
     tf.summary.histogram('triple_loss_distribution', triple_losses)

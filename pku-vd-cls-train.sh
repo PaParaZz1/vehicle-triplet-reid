@@ -18,7 +18,7 @@
 IMAGE_ROOT=/home/qwang/Dataset/PKU-VD/VD1/ ; shift
 INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
 # INIT_CHECKPT=./pretrained_models/inception_v4.ckpt ; shift
-EXP_ROOT=./experiments/pku-vd/expr_cls_supervised_0.01_cosine_resnet-50 ; shift
+EXP_ROOT=./experiments/pku-vd/expr_cls_cosine_0.01_resnet-50_1 ; shift
 
 
 python train.py \

@@ -46,12 +46,12 @@ def cdist(a, b, metric='euclidean'):
     with tf.name_scope("cdist"):
         if metric == 'cosine':
             a_norm = a / tf.sqrt(tf.reduce_sum(tf.square(a), axis=1, keep_dims=True))
-            print('Normalized a: {}'.format(a_norm))
+            # print('Normalized a: {}'.format(a_norm))
             b_norm = b / tf.sqrt(tf.reduce_sum(tf.square(b), axis=1, keep_dims=True))
-            print('Normalized b: {}'.format(b_norm))
+            # print('Normalized b: {}'.format(b_norm))
             cosine_similarity = tf.matmul(a_norm, b_norm, transpose_b=True)
-            print('Cosine Similarity: {}'.format(cosine_similarity))
-            return 0.5 * (1 - cosine_similarity)
+            # print('Cosine Similarity: {}'.format(cosine_similarity))
+            return 1 - cosine_similarity
         else:
             diffs = all_diffs(a, b)
             if metric == 'sqeuclidean':
