@@ -44,15 +44,25 @@ def cdist(a, b, metric='euclidean'):
         undefined. Thus, it will never return exact zero in these cases.
     """
     with tf.name_scope("cdist"):
+        print('a: {} | b: {} '.format(a, b))
         if metric == 'cosine':
             a_norm = a / tf.sqrt(tf.reduce_sum(tf.square(a), axis=1, keep_dims=True))
-            # print('Normalized a: {}'.format(a_norm))
             b_norm = b / tf.sqrt(tf.reduce_sum(tf.square(b), axis=1, keep_dims=True))
-            # print('Normalized b: {}'.format(b_norm))
             cosine_similarity = tf.matmul(a_norm, b_norm, transpose_b=True)
-            # print('Cosine Similarity: {}'.format(cosine_similarity))
-            return 1 - cosine_similarity
-        else:
+            return 0.5 * (1 - cosine_similarity)
+        elif metric == 'euclidean_norm':
+            a_norm = a / tf.sqrt(tf.reduce_sum(tf.square(a), axis=1, keep_dims=True))
+            b_norm = b / tf.sqrt(tf.reduce_sum(tf.square(b), axis=1, keep_dims=True))
+            diffs = all_diffs(a_norm, b_norm)
+            return tf.sqrt(tf.reduce_sum(tf.square(diffs), axis=-1) + 1e-12)
+        elif metric == 'zscore_norm':
+            mean_a, var_a = tf.nn.moments(a, axes=[0], keep_dims=True)
+            a_norm = (a - mean_a) / tf.sqrt(var_a)
+            mean_b, var_b = tf.nn.moments(b, axes=[0], keep_dims=True)
+            b_norm = (b - mean_b) / tf.sqrt(var_b)
+            diffs = all_diffs(a_norm, b_norm)
+            return tf.sqrt(tf.reduce_sum(tf.square(diffs), axis=-1) + 1e-12)
+        else: 
             diffs = all_diffs(a, b)
             if metric == 'sqeuclidean':
                 return tf.reduce_sum(tf.square(diffs), axis=-1)
@@ -66,6 +76,8 @@ def cdist(a, b, metric='euclidean'):
 cdist.supported_metrics = [
     'euclidean',
     'sqeuclidean',
+    'euclidean_norm',
+    'zscore_norm',
     'cityblock',
     'cosine',
 ]

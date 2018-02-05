@@ -1,10 +1,8 @@
 #!/bin/sh
 
-epoch=110000
+epoch=360000
 dataset_size='small_'
-# expr_dir='expr_cls_euclidean_1.0_resnet-50'
-# expr_dir='expr_cls_euclidean_1e-3_balanced_resnet-50'
-expr_dir='expr_cls_euclidean_1e-2_balanced_resnet-50'
+expr_dir='pku-vd_resnet50_v2_results'
 
 python ./evaluate.py \
     --excluder diagonal \
@@ -13,6 +11,7 @@ python ./evaluate.py \
     --gallery_dataset ./data/pku-vd/VD1_${dataset_size}query.csv \
     --gallery_embeddings ./experiments/pku-vd/${expr_dir}/pku-vd_VD1_${dataset_size}query_${epoch}_embeddings.h5 \
     --filename ./experiments/pku-vd/${expr_dir}/pku-vd_VD1_${dataset_size}query_${epoch}_evaluation.json \
-    --batch_size 64 \
-    --metric euclidean \
-    # --metric euclidean \
+    --batch_size 128 \
+    --metric cosine \
+    # --metric zscore_norm \
+#     --display

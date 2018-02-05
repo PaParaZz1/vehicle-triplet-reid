@@ -16,14 +16,12 @@
 # EXP_ROOT=$1 ; shift
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
-# INIT_CHECKPT=./pretrained_models/resnet_v1_101.ckpt ; shift
-INIT_CHECKPT=./pretrained_models/inception_v4.ckpt ; shift
-EXP_ROOT=./experiments/pku-vd/expr_inception_v4 ; shift
-
+INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
+EXP_ROOT=./experiments/pku-vd/expr_cls_euclidean_1.0_resnet-50 ; shift
 
 python train.py \
-    --train_set data/pku-vd/VD1_train.csv \
-    --model_name inception \
+    --train_set data/pku-vd/VD1_train_cls.csv \
+    --model_name resnet_v2_50 \
     --image_root $IMAGE_ROOT \
     --initial_checkpoint $INIT_CHECKPT \
     --experiment_root $EXP_ROOT \
@@ -38,12 +36,13 @@ python train.py \
     --margin soft \
     --metric euclidean \
     --loss batch_hard \
-    --learning_rate 1e-4 \
+    --head_name fc1024_cls_supervised \
+    --learning_rate 5e-6 \
     --train_iterations 400000 \
     --decay_start_iteration 10000 \
+    --cls_loss_weight 1.0 \
     --lr_decay_factor 0.96 \
     --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
-    --detailed_logs \
+    --resume \
     "$@"
-    # --resume \
