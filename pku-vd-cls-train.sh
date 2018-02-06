@@ -4,16 +4,18 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-CLS_LOSS_WEIGHT=1.0
+CLS_LOSS_WEIGHT=10.0
 METRIC='euclidean'
+HEADS='fc1024_cls'
+BACKBONE='resnet_v2_50'
 
-IMAGE_ROOT=/data2/wangq/VD1/ ; shift
+IMAGE_ROOT=/home/qwang/Dataset/PKU-VD/VD1/ ; shift
 INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
-EXP_ROOT=./experiments/pku-vd/expr_cls_${METRIC}_${CLS_LOSS_WEIGHT}_newhead_balanced_resnet-50 ; shift
+EXP_ROOT=./experiments/pku-vd/expr_cls_${METRIC}_${CLS_LOSS_WEIGHT}_${HEADS}_${BACKBONE} ; shift
 
 python train.py \
     --train_set data/pku-vd/VD1_train_cls.csv \
-    --model_name resnet_v2_50 \
+    --model_name ${BACKBONE} \
     --image_root $IMAGE_ROOT \
     --initial_checkpoint $INIT_CHECKPT \
     --experiment_root $EXP_ROOT \
@@ -28,7 +30,7 @@ python train.py \
     --margin soft \
     --metric ${METRIC} \
     --loss batch_hard \
-    --head_name fc1024_cls_supervised \
+    --head_name ${HEADS} \
     --learning_rate 1e-4 \
     --train_iterations 400000 \
     --decay_start_iteration 10000 \
@@ -36,6 +38,5 @@ python train.py \
     --lr_decay_factor 0.96 \
     --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
-    --detailed_logs \
+    --resume \
     "$@"
-    # --resume \
