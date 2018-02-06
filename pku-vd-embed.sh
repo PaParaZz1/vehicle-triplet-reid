@@ -1,11 +1,12 @@
 #!/bin/sh
 
-epoch=110000
-# dataset_size=''
-dataset_size='small_'
+epoch=30000
+dataset_size=''
+# dataset_size='small_'
 # expr_dir='expr_cls_euclidean_1.0_resnet-50'
 # expr_dir='expr_cls_euclidean_1e-3_balanced_resnet-50'
-expr_dir='expr_cls_euclidean_1e-2_balanced_resnet-50'
+# expr_dir='expr_cls_euclidean_1e-2_balanced_resnet-50'
+expr_dir='expr_cls_euclidean_10.0_newhead_balanced_resnet-50'
 
 python embed.py \
         --experiment_root ./experiments/pku-vd/${expr_dir} \

@@ -4,7 +4,7 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-CLS_LOSS_WEIGHT=10.0
+CLS_LOSS_WEIGHT=0.1
 METRIC='euclidean'
 HEADS='fc1024_cls'
 BACKBONE='resnet_v2_50'
@@ -38,5 +38,5 @@ python train.py \
     --lr_decay_factor 0.96 \
     --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
-    --resume \
     "$@"
+    # --resume \

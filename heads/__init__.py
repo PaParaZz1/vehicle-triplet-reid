@@ -4,5 +4,6 @@ HEAD_CHOICES = (
     'direct_normalize',
     'fc1024',
     'fc1024_normalize',
-    'fc1024_cls_supervised',
+    'fc1024_cls',
+    'fc1024_cls_norm',
 )
