@@ -8,7 +8,7 @@ CLS_LOSS_WEIGHT=1.0
 METRIC='euclidean'
 HEADS='fc1024_cls_projection'
 BACKBONE='resnet_v2_50'
-EXPR_NAME='_3'
+EXPR_NAME='_anchorwise_cls_0'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
@@ -32,12 +32,12 @@ python train.py \
     --metric ${METRIC} \
     --loss batch_hard \
     --head_name ${HEADS} \
-    --learning_rate 1e-5 \
+    --learning_rate 1e-4 \
     --train_iterations 400000 \
     --decay_start_iteration 0 \
     --cls_loss_weight ${CLS_LOSS_WEIGHT} \
-    --lr_decay_factor 0.8 \
-    --lr_decay_steps 20000 \
-    --weight_decay_factor 0.0005 \
+    --lr_decay_factor 0.96 \
+    --lr_decay_steps 4000 \
+    --weight_decay_factor 0.0002 \
     "$@"
     # --resume \

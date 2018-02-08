@@ -324,14 +324,19 @@ def main():
 
     # model_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_models, logits=endpoints['model_logits'], weights=0.45 * args.cls_loss_weight)
     # color_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_colors, logits=endpoints['color_logits'], weights=1.5 * args.cls_loss_weight)
-    model_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_models, logits=endpoints['model_logits'], weights=args.cls_loss_weight)
-    color_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_colors, logits=endpoints['color_logits'], weights=args.cls_loss_weight)
+    # model_cls_losses = tf.losses.softmax_cross_entropy(onehot_labels=car_models, logits=endpoints['model_logits'], weights=args.cls_loss_weight, dim=1)
+    # color_cls_losses = tf.losses.softmax_cross_entropy(onehot_labels=car_colors, logits=endpoints['color_logits'], weights=args.cls_loss_weight, dim=1)
+    model_cls_losses = tf.nn.softmax_cross_entropy_with_logits(labels=car_models, logits=endpoints['model_logits'], dim=1) * args.cls_loss_weight
+    color_cls_losses = tf.nn.softmax_cross_entropy_with_logits(labels=car_colors, logits=endpoints['color_logits'], dim=1) * args.cls_loss_weight
 
     # Count the number of active entries, and compute the total batch loss.
     num_active = tf.reduce_sum(tf.cast(tf.greater(triple_losses, 1e-5), tf.float32))
+    total_losses = triple_losses + model_cls_losses + color_cls_losses
     loss_mean = tf.reduce_mean(triple_losses)
+    model_cls_loss = tf.reduce_mean(model_cls_losses)
+    color_cls_loss = tf.reduce_mean(color_cls_losses)
     
-    total_loss = loss_mean + model_cls_loss + color_cls_loss
+    total_loss = tf.reduce_mean(total_losses)
 
     # Some logging for tensorboard.
     tf.summary.histogram('triple_loss_distribution', triple_losses)
