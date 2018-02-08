@@ -6,9 +6,9 @@
 # Shift the arguments so that we can just forward the remainder.
 CLS_LOSS_WEIGHT=1.0
 METRIC='euclidean'
-HEADS='fc1024_cls_projection'
+HEADS='fc1024_cls'
 BACKBONE='resnet_v2_50'
-EXPR_NAME='_3'
+EXPR_NAME='_0'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
@@ -18,8 +18,8 @@ python train.py \
     --train_set data/pku-vd/VD1_train_cls.csv \
     --model_name ${BACKBONE} \
     --image_root $IMAGE_ROOT \
-    --initial_checkpoint $INIT_CHECKPT \
-    --experiment_root $EXP_ROOT \
+    --initial_checkpoint ${INIT_CHECKPT} \
+    --experiment_root ${EXP_ROOT} \
     --flip_augment \
     --crop_augment \
     --detailed_logs \
@@ -32,12 +32,12 @@ python train.py \
     --metric ${METRIC} \
     --loss batch_hard \
     --head_name ${HEADS} \
-    --learning_rate 1e-5 \
+    --learning_rate 1e-4 \
     --train_iterations 400000 \
     --decay_start_iteration 0 \
     --cls_loss_weight ${CLS_LOSS_WEIGHT} \
-    --lr_decay_factor 0.8 \
-    --lr_decay_steps 20000 \
-    --weight_decay_factor 0.0005 \
+    --lr_decay_factor 0.96 \
+    --lr_decay_steps 4000 \
+    --weight_decay_factor 0.0002 \
     "$@"
     # --resume \

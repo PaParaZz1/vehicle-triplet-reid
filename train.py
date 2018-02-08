@@ -289,7 +289,7 @@ def main():
             lambda im, car_model, car_color, fid, pid: (tf.random_crop(im, net_input_size + (3,)), car_model, car_color, fid, pid))
 
     dataset = dataset.map(
-            lambda im, car_model, car_color, fid, pid: (im, tf.one_hot(car_model, 1232), tf.one_hot(car_color, 11), fid, pid))
+            lambda im, car_model, car_color, fid, pid: (im, tf.one_hot(car_model, depth=1232), tf.one_hot(car_color, depth=11), fid, pid))
 
     # Group it back into PK batches.
     batch_size = args.batch_p * args.batch_k

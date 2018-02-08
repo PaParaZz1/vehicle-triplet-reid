@@ -1,11 +1,13 @@
 #!/bin/sh
 
-epoch=40000
+epoch=20000
 dataset_size='small_'
 # expr_dir='expr_cls_euclidean_1.0_resnet-50'
 # expr_dir='expr_cls_euclidean_1e-3_balanced_resnet-50'
 # expr_dir='expr_cls_euclidean_1e-2_balanced_resnet-50'
-expr_dir='expr_cls_euclidean_1.0_fc1024_cls_projection_resnet_v2_50_origin'
+expr_dir='expr_cls_euclidean_1.0_fc1024_cls_projection_resnet_v2_50_0'
+# expr_dir='expr_cls_euclidean_0.5_fc1024_cls_projection_resnet_v2_50'
+# expr_dir='expr_cls_euclidean_0.5_fc1024_cls_projection_resnet_v2_50__2'
 # expr_dir='expr_cls_euclidean_1.0_fc1024_cls_wo_projection_resnet_v2_50'
 
 python ./evaluate.py \
