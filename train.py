@@ -12,6 +12,7 @@ import json
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib import slim
+from tensorflow.python.client import device_lib
 
 import common
 import lbtoolbox as lb
@@ -182,6 +183,63 @@ def sample_k_fids_for_pid(pid, all_models, all_colors, all_fids, all_pids, batch
 
     return selected_models, selected_colors, selected_fids, tf.fill([batch_k], pid)
 
+def average_gradients(tower_grads):
+    """Calculate the average gradient for each shared variable across all towers.
+    Note that this function provides a synchronization point across all towers.
+    Args:
+    tower_grads: List of lists of (gradient, variable) tuples. The outer list
+    is over individual gradients. The inner list is over the gradient
+    calculation for each tower.
+    Returns:
+    List of pairs of (gradient, variable) where the gradient has been averaged
+    across all towers.
+    """
+    average_grads = []
+    for grad_and_vars in zip(*tower_grads):
+        # Note that each grad_and_vars looks like the following:
+        #   ((grad0_gpu0, var0_gpu0), ... , (grad0_gpuN, var0_gpuN))
+        grads = []
+        for g, _ in grad_and_vars:
+            # Add 0 dimension to the gradients to represent the tower.
+            expanded_g = tf.expand_dims(g, 0)
+
+            # Append on a 'tower' dimension which we will average over below.
+            grads.append(expanded_g)
+
+        # Average over the 'tower' dimension.
+        grad = tf.concat(axis=0, values=grads)
+        grad = tf.reduce_mean(grad, 0)
+
+        # Keep in mind that the Variables are redundant because they are shared
+        # across towers. So .. we will just return the first tower's pointer to
+        # the Variable.
+        v = grad_and_vars[0][1]
+        grad_and_var = (grad, v)
+        average_grads.append(grad_and_var)
+    return average_grads
+
+
+def combine_gradients(tower_grads):
+    """Calculate the combined gradient for each shared variable across all towers.
+    Note that this function provides a synchronization point across all towers.
+    Args:
+    tower_grads: List of lists of (gradient, variable) tuples. The outer list
+    is over individual gradients. The inner list is over the gradient
+    calculation for each tower.
+    Returns:
+    List of pairs of (gradient, variable) where the gradient has been summed
+    across all towers.
+    """
+    filtered_grads = [[x for x in grad_list if x[0] is not None] for grad_list in tower_grads]
+    final_grads = []
+    for i in xrange(len(filtered_grads[0])):
+        grads = [filtered_grads[t][i] for t in xrange(len(filtered_grads))]
+        grad = tf.stack([x[0] for x in grads], 0)
+        grad = tf.reduce_sum(grad, 0)
+        final_grads.append((grad, filtered_grads[0][i][1],))
+
+    return final_grads
+
 
 def main():
     args = parser.parse_args()
@@ -249,6 +307,19 @@ def main():
         log.error("You did not specify the required `image_root` argument!")
         sys.exit(1)
 
+    local_device_protos = device_lib.list_local_devices()
+    gpus = [x.name for x in local_device_protos if x.device_type == 'GPU']
+    num_gpus = len(gpus)
+
+    if num_gpus > 0:
+        logging.info("Using the following GPUs to train: " + str(gpus))
+        num_towers = num_gpus
+        device_string = '/gpu:%d'
+    else:
+        logging.info("No GPUs found. Training on CPU.")
+        num_towers = 1
+        device_string = '/cpu:%d'
+
     # Load the data from the CSV file.
     pids, fids, models, colors = common.load_dataset_cls(args.train_set, args.image_root)
     max_fid_len = max(map(len, fids))  # We'll need this later for logfiles.
@@ -298,43 +369,99 @@ def main():
     # Overlap producing and consuming for parallelism.
     dataset = dataset.prefetch(1)
 
-    # Since we repeat the data infinitely, we only need a one-shot iterator.
-    images, car_models, car_colors, fids, pids = dataset.make_one_shot_iterator().get_next()
+    # Define the optimizer and the learning-rate schedule.
+    # Unfortunately, we get NaNs if we don't handle no-decay separately.
+    global_step = tf.Variable(0, name='global_step', trainable=False)
+    if 0 <= args.decay_start_iteration < args.train_iterations:
+        learning_rate = tf.train.exponential_decay(
+            args.learning_rate,
+            tf.maximum(0, global_step - args.decay_start_iteration),
+            # args.train_iterations - args.decay_start_iteration, args.weight_decay_factor)
+            args.lr_decay_steps, args.lr_decay_factor, staircase=True)
+    else:
+        learning_rate = args.learning_rate
+    tf.summary.scalar('learning_rate', learning_rate)
+    optimizer = tf.train.AdamOptimizer(learning_rate)
+    # Feel free to try others!
+    # optimizer = tf.train.AdadeltaOptimizer(learning_rate)
 
-    # model_onehot = tf.one_hot(models, depth=1232)
-    # color_onehot = tf.one_hot(colors, depth=11)
+    tower_gradients = []
+    # tower_predictions = []
+    tower_triplet_losses = []
+    tower_dists = []
+    tower_triplet_losses_vec = []
+    tower_train_top1 = []
+    tower_prec_at_k = []
+    tower_neg_dists = []
+    tower_pos_dists = []
+    tower_model_cls_losses = []
+    tower_color_cls_losses = []
+    tower_total_cls_losses = []
+    tower_num_active = []
+    for i in range(num_towers):
+        with tf.device(device_string % i):
+            with (tf.variable_scope(("tower"), reuse=True if i > 0 else None)):
+                with (slim.arg_scope([slim.model_variable, slim.variable], device="/cpu:0" if num_gpus!=1 else "/gpu:0")):
+                    # Since we repeat the data infinitely, we only need a one-shot iterator.
+                    images, car_models, car_colors, fids, pids = dataset.make_one_shot_iterator().get_next()
+                    
+                    # Create the model and an embedding head.
+                    model = import_module('nets.' + args.model_name)
+                    head = import_module('heads.' + args.head_name)
+                    
+                    # Feed the image through the model. The returned `body_prefix` will be used
+                    # further down to load the pre-trained weights for all variables with this
+                    # prefix.
+                    endpoints, body_prefix = model.endpoints(images, is_training=True)
+                    with tf.name_scope('head'):
+                        endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
+                    
+                    # Create the loss in two steps:
+                    # 1. Compute all pairwise distances according to the specified metric.
+                    # 2. For each anchor along the first dimension, compute its loss.
+                    _dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
+                    _triple_losses, _train_top1, _prec_at_k, _, _neg_dists, _pos_dists = loss.LOSS_CHOICES[args.loss](
+                    _dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
 
-    # Create the model and an embedding head.
-    model = import_module('nets.' + args.model_name)
-    head = import_module('heads.' + args.head_name)
-
-    # Feed the image through the model. The returned `body_prefix` will be used
-    # further down to load the pre-trained weights for all variables with this
-    # prefix.
-    endpoints, body_prefix = model.endpoints(images, is_training=True)
-    with tf.name_scope('head'):
-        endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
-
-    # Create the loss in two steps:
-    # 1. Compute all pairwise distances according to the specified metric.
-    # 2. For each anchor along the first dimension, compute its loss.
-    dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
-    triple_losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
-        dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
-
-    # model_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_models, logits=endpoints['model_logits'], weights=0.45 * args.cls_loss_weight)
-    # color_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_colors, logits=endpoints['color_logits'], weights=1.5 * args.cls_loss_weight)
-    model_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_models, logits=endpoints['model_logits'], weights=args.cls_loss_weight)
-    color_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_colors, logits=endpoints['color_logits'], weights=args.cls_loss_weight)
-
-    # Count the number of active entries, and compute the total batch loss.
-    num_active = tf.reduce_sum(tf.cast(tf.greater(triple_losses, 1e-5), tf.float32))
-    loss_mean = tf.reduce_mean(triple_losses)
-    
-    total_loss = loss_mean + model_cls_loss + color_cls_loss
+                    tower_dists.append(_dists)
+                    tower_triplet_losses_vec.append(_triple_losses)
+                    tower_train_top1.append(_train_top1)
+                    tower_prec_at_k.append(_prec_at_k)
+                    tower_neg_dists.append(_neg_dists)
+                    tower_pos_dists.append(_pos_dists)
+                    
+                    model_cls_losses = tf.nn.softmax_cross_entropy_with_logits(labels=car_models, logits=endpoints['model_logits']) * args.cls_loss_weight
+                    color_cls_losses = tf.nn.softmax_cross_entropy_with_logits(labels=car_colors, logits=endpoints['color_logits']) * args.cls_loss_weight
+                    total_losses = _triple_losses + model_cls_losses + color_cls_losses
+                    
+                    _model_cls_loss = tf.reduce_mean(model_cls_losses)
+                    _color_cls_loss = tf.reduce_mean(color_cls_losses)
+                    _loss_mean = tf.reduce_mean(_triple_losses)
+                    _total_loss = tf.reduce_mean(total_losses)
+                    # Count the number of active entries, and compute the total batch loss.
+                    _num_active = tf.reduce_sum(tf.cast(tf.greater(_triple_losses, 1e-5), tf.float32))
+                    tower_num_active.append(_num_active)
+                    tower_triplet_losses.append(_loss_mean)
+                    tower_model_cls_losses.append(_model_cls_loss)
+                    tower_color_cls_losses.append(_color_cls_loss)
+                    
+                    tower_total_losses.append(_total_loss)
+                    gradients = optimizer.compute_gradients(_total_loss, colocate_gradients_with_ops=False)
+                    tower_gradients.append(gradients)
+                    
+    triple_loss = tf.reduce_mean(tf.stack(tower_triplet_losses), 0)
+    model_cls_loss = tf.reduce_mean(tf.stack(tower_model_cls_losses), 0)
+    color_cls_loss = tf.reduce_mean(tf.stack(tower_color_cls_losses), 0)
+    total_loss = tf.reduce_mean(tf.stack(tower_total_losses), 0)
+    triple_losses = tf.reduce_mean(tf.stack(tower_triplet_losses_vec), 0)
+    train_top1 = tf.reduce_mean(tf.stack(tower_train_top1), 0)
+    prec_at_k = tf.reduce_mean(tf.stack(tower_prec_at_k), 0)
+    neg_dists = tf.reduce_mean(tf.stack(tower_neg_dists), 0)
+    pos_dists = tf.reduce_mean(tf.stack(tower_pos_dists), 0)
+    num_active = tf.reduce_mean(tf.stack(tower_num_active), 0)
+    merged_gradients = combine_gradients(tower_gradients)
 
     # Some logging for tensorboard.
-    tf.summary.histogram('triple_loss_distribution', triple_losses)
     tf.summary.scalar('triple_loss', loss_mean)
     tf.summary.scalar('model_cls_loss', model_cls_loss)
     tf.summary.scalar('color_cls_loss', color_cls_loss)
@@ -345,16 +472,18 @@ def main():
     tf.summary.histogram('embedding_dists', dists)
     tf.summary.histogram('embedding_pos_dists', pos_dists)
     tf.summary.histogram('embedding_neg_dists', neg_dists)
+    '''
     tf.summary.histogram('embedding_lengths',
                          tf.norm(endpoints['emb_raw'], axis=1))
+    '''
 
     # Create the mem-mapped arrays in which we'll log all training detail in
     # addition to tensorboard, because tensorboard is annoying for detailed
     # inspection and actually discards data in histogram summaries.
     if args.detailed_logs:
-        log_embs = lb.create_or_resize_dat(
-            os.path.join(args.experiment_root, 'embeddings'),
-            dtype=np.float32, shape=(args.train_iterations, batch_size, args.embedding_dim))
+        # log_embs = lb.create_or_resize_dat(
+        #     os.path.join(args.experiment_root, 'embeddings'),
+        #     dtype=np.float32, shape=(args.train_iterations, batch_size, args.embedding_dim))
         log_triple_loss = lb.create_or_resize_dat(
             os.path.join(args.experiment_root, 'triple_losses'),
             dtype=np.float32, shape=(args.train_iterations, batch_size))
@@ -374,25 +503,11 @@ def main():
     model_variables = tf.get_collection(
         tf.GraphKeys.GLOBAL_VARIABLES, body_prefix)
 
-    # Define the optimizer and the learning-rate schedule.
-    # Unfortunately, we get NaNs if we don't handle no-decay separately.
-    global_step = tf.Variable(0, name='global_step', trainable=False)
-    if 0 <= args.decay_start_iteration < args.train_iterations:
-        learning_rate = tf.train.exponential_decay(
-            args.learning_rate,
-            tf.maximum(0, global_step - args.decay_start_iteration),
-            # args.train_iterations - args.decay_start_iteration, args.weight_decay_factor)
-            args.lr_decay_steps, args.lr_decay_factor, staircase=True)
-    else:
-        learning_rate = args.learning_rate
-    tf.summary.scalar('learning_rate', learning_rate)
-    optimizer = tf.train.AdamOptimizer(learning_rate)
-    # Feel free to try others!
-    # optimizer = tf.train.AdadeltaOptimizer(learning_rate)
 
     # Update_ops are used to update batchnorm stats.
     with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-        train_op = optimizer.minimize(total_loss, global_step=global_step)
+        # train_op = optimizer.minimize(total_loss, global_step=global_step)
+        train_op = optimizer.apply_gradients(merged_gradients, global_step=global_step)
 
     # Define a saver for the complete model.
     checkpoint_saver = tf.train.Saver(max_to_keep=0)

@@ -12,6 +12,7 @@ def endpoints(image, is_training):
 
     with tf.contrib.slim.arg_scope(resnet_arg_scope(batch_norm_decay=0.9, weight_decay=0.0)):
         _, endpoints = resnet_v2_50(image, num_classes=None, is_training=is_training, global_pool=True)
+    print('endpoints: {}'.format(endpoints))
 
     endpoints['model_output'] = endpoints['global_pool'] = tf.reduce_mean(
         endpoints['resnet_v2_50/block4'], [1, 2], name='pool5', keep_dims=False)
