@@ -1,13 +1,11 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=6
-epoch=400000
+export CUDA_VISIBLE_DEVICES=1
+epoch=360000
 dataset_size=''
 # dataset_size='small_'
-# expr_dir='expr_cls_euclidean_1.0_fc1024_cls_resnet_v2_50_0'
-# expr_dir='expr_cls_euclidean_0.5_fc1024_cls_projection_resnet_v2_50__2'
-expr_dir='expr_cls_euclidean_0.5_fc1024_cls_projection_resnet_v2_50'
-# expr_dir='expr_cls_euclidean_1.0_fc1024_cls_projection_resnet_v2_50_0'
+# expr_dir='expr_cls_euclidean_1.0_fc1024_cls_resnet_v2_50_1'
+expr_dir='expr_cls_euclidean_1.0_fc1024_cls_projection_resnet_v2_50_anchorwise_cls_0'
 
 python embed.py \
         --experiment_root ./experiments/pku-vd/${expr_dir} \
