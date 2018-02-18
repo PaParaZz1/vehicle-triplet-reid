@@ -149,6 +149,8 @@ def main():
                 # print('match shape: {}'.format(pid_matches[i, np.argsort(distances[i])].shape))
                 k = np.where(pid_matches[i, np.argsort(distances[i])])[0][0]
                 if args.display:
+                    if not os.path.exists('./mismatched-5'):
+                        os.mkdir('mismatched-5')
                     mismatched_idx = np.argsort(distances[i])[:k]
                     if k > 5:
                         print('Mismatch | fid: {}'.format(fids[i]))

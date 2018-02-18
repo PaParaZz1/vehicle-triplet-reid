@@ -324,20 +324,24 @@ def main():
 
     # model_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_models, logits=endpoints['model_logits'], weights=0.45 * args.cls_loss_weight)
     # color_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_colors, logits=endpoints['color_logits'], weights=1.5 * args.cls_loss_weight)
-    model_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_models, logits=endpoints['model_logits'], weights=args.cls_loss_weight)
-    color_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_colors, logits=endpoints['color_logits'], weights=args.cls_loss_weight)
+    # model_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_models, logits=endpoints['model_logits'], weights=args.cls_loss_weight)
+    # color_cls_loss = tf.losses.softmax_cross_entropy(onehot_labels=car_colors, logits=endpoints['color_logits'], weights=args.cls_loss_weight)
+    model_cls_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=car_models, logits=endpoints['model_logits'])) * args.cls_loss_weight
+    # color_cls_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=car_colors, logits=endpoints['color_logits'])) * args.cls_loss_weight
+    color_cls_loss = tf.zeros((1, 1))
 
     # Count the number of active entries, and compute the total batch loss.
     num_active = tf.reduce_sum(tf.cast(tf.greater(triple_losses, 1e-5), tf.float32))
     loss_mean = tf.reduce_mean(triple_losses)
     
-    total_loss = loss_mean + model_cls_loss + color_cls_loss
+    # total_loss = loss_mean + model_cls_loss + color_cls_loss
+    total_loss = loss_mean + model_cls_loss
 
     # Some logging for tensorboard.
     tf.summary.histogram('triple_loss_distribution', triple_losses)
     tf.summary.scalar('triple_loss', loss_mean)
     tf.summary.scalar('model_cls_loss', model_cls_loss)
-    tf.summary.scalar('color_cls_loss', color_cls_loss)
+    # tf.summary.scalar('color_cls_loss', color_cls_loss)
     tf.summary.scalar('loss', total_loss)
     tf.summary.scalar('batch_top1', train_top1)
     tf.summary.scalar('batch_prec_at_{}'.format(args.batch_k-1), prec_at_k)

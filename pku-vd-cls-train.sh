@@ -4,11 +4,11 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-CLS_LOSS_WEIGHT=1.0
+CLS_LOSS_WEIGHT=0.5
 METRIC='euclidean'
-HEADS='fc1024_cls'
+HEADS='fc1024_cls_projection'
 BACKBONE='resnet_v2_50'
-EXPR_NAME='_0'
+EXPR_NAME=''
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
@@ -33,11 +33,11 @@ python train.py \
     --loss batch_hard \
     --head_name ${HEADS} \
     --learning_rate 1e-4 \
-    --train_iterations 400000 \
-    --decay_start_iteration 0 \
+    --train_iterations 800000 \
+    --decay_start_iteration 10000 \
     --cls_loss_weight ${CLS_LOSS_WEIGHT} \
     --lr_decay_factor 0.96 \
     --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
+    --resume \
     "$@"
-    # --resume \

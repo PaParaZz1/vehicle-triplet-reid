@@ -1,14 +1,13 @@
 #!/bin/sh
 
-epoch=20000
+export CUDA_VISIBLE_DEVICES=6
+
+epoch=400000
 dataset_size='small_'
-# expr_dir='expr_cls_euclidean_1.0_resnet-50'
-# expr_dir='expr_cls_euclidean_1e-3_balanced_resnet-50'
-# expr_dir='expr_cls_euclidean_1e-2_balanced_resnet-50'
-expr_dir='expr_cls_euclidean_1.0_fc1024_cls_projection_resnet_v2_50_0'
-# expr_dir='expr_cls_euclidean_0.5_fc1024_cls_projection_resnet_v2_50'
+# expr_dir='expr_cls_euclidean_1.0_fc1024_cls_resnet_v2_50_0'
+# expr_dir='expr_cls_euclidean_1.0_fc1024_cls_projection_resnet_v2_50_0'
+expr_dir='expr_cls_euclidean_0.5_fc1024_cls_projection_resnet_v2_50'
 # expr_dir='expr_cls_euclidean_0.5_fc1024_cls_projection_resnet_v2_50__2'
-# expr_dir='expr_cls_euclidean_1.0_fc1024_cls_wo_projection_resnet_v2_50'
 
 python ./evaluate.py \
     --excluder diagonal \
@@ -19,4 +18,3 @@ python ./evaluate.py \
     --filename ./experiments/pku-vd/${expr_dir}/pku-vd_VD1_${dataset_size}query_${epoch}_evaluation.json \
     --batch_size 64 \
     --metric euclidean \
-    # --metric euclidean \
