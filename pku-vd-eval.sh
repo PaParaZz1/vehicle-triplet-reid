@@ -1,9 +1,9 @@
 #!/bin/sh
 
-epoch=280000
+export CUDA_VISIBLE_DEVICES=0
+epoch=90000
 dataset_size='small_'
-expr_dir='expr_inception_v4'
-# expr_dir='expr_resnet50_v2_50_1'
+expr_dir='expr_attention_euclidean_fc1024_spatial_attention_resnet_v2_50_0'
 
 python ./evaluate.py \
     --excluder diagonal \
