@@ -4,15 +4,14 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=2
 
 METRIC='euclidean'
-HEADS='fc1024_spatial_attention'
+HEADS='fc1024_recurrent_attention'
 BACKBONE='resnet_v2_50'
-# EXPR_NAME='_0'
-EXPR_NAME='_test'
+EXPR_NAME='_0'
 
-IMAGE_ROOT=/home/qwang/Dataset/PKU-VD/VD1/ ; shift
+IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
 
@@ -40,5 +39,5 @@ python train.py \
     --lr_decay_factor 0.96 \
     --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
-    --resume \
     "$@"
+    # --resume \
