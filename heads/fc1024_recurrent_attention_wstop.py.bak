@@ -40,7 +40,6 @@ def head(endpoints, embedding_dim, is_training):
             
             attention_maps = []
             _masked = []
-            signals = []
             _masked.append(features)
 
             with tf.variable_scope("GRU_Attention"):
@@ -49,13 +48,12 @@ def head(endpoints, embedding_dim, is_training):
                     # state is in shape (?, 64)
                     output, state = gru_cell(_input, state)
                     h = tf.expand_dims(slim.fully_connected(inputs=state, num_outputs=dim[1], biases_initializer=None, scope='hidden2h'), 1)
-                    stop_check = tf.cast(tf.sigmoid(slim.fully_connected(inputs=h, num_outputs=1, biases_initializer=None, scope='stop_check')), dtype=tf.int32)
-                    signals.append(stop_check)
+                    stop_check = tf.sigmoid(slim.fully_connected(inputs=h, num_outputs=1, biases_initializer=None, scope='stop_check'))
                     e = tf.reshape(tf.add(a_i, h), [-1, dim[1]])
                     _att = slim.fully_connected(inputs=e, num_outputs=1, scope='e2attention')
                     _alpha = tf.nn.softmax(tf.reshape(_att, [-1, dim[0]]))
                     attention_maps.append(_alpha)
-                    _mask = tf.multiply(features, tf.expand_dims(_alpha, 2)) * tf.reduce_min(tf.stack(signals, 1), 1)
+                    _mask = tf.multiply(features, tf.expand_dims(_alpha, 2)) * stop_check
                     # _masked.append(tf.multiply(_mask, stop_check))
                     _masked.append(_mask)
                     _input = tf.reduce_sum(_mask, 1)
