@@ -48,26 +48,15 @@ def head(endpoints, embedding_dim, is_training):
                     # state is in shape (?, 64)
                     output, state = gru_cell(_input, state)
                     h = tf.expand_dims(slim.fully_connected(inputs=state, num_outputs=dim[1], biases_initializer=None, scope='hidden2h'), 1)
+                    stop_check = tf.sigmoid(slim.fully_connected(inputs=h, num_outputs=1, biases_initializer=None, scope='stop_check'))
                     e = tf.reshape(tf.add(a_i, h), [-1, dim[1]])
                     _att = slim.fully_connected(inputs=e, num_outputs=1, scope='e2attention')
                     _alpha = tf.nn.softmax(tf.reshape(_att, [-1, dim[0]]))
                     attention_maps.append(_alpha)
-                    _mask = tf.multiply(features, tf.expand_dims(_alpha, 2))
+                    _mask = tf.multiply(features, tf.expand_dims(_alpha, 2)) * stop_check
+                    # _masked.append(tf.multiply(_mask, stop_check))
                     _masked.append(_mask)
-                    _input = tf.reduce_sum(_mask, 1) 
-
-            '''
-            for i in range(attention_steps - 1):
-                if i > 0: tf.get_variable_scope().reuse_variables()
-                _inputs.append(_input)
-                output, state = gru_cell(_input, state)
-                h = tf.expand_dims(slim.fully_connected(inputs=state, num_outputs=dim[1], biases_initializer=None, scope='hidden2h'), 1)
-                e = tf.reshape(tf.add(a_i, h), [-1, dim[1]])
-                _att = slim.fully_connected(inputs=e, num_outputs=1, scope='e2attention')
-                _alpha = tf.nn.softmax(tf.reshape(_att, [-1, dim[0]]))
-                attention_maps.append(_alpha)
-                _input = tf.reduce_sum(tf.multiply(features, tf.expand_dims(_alpha, 2)), 1) 
-            '''
+                    _input = tf.reduce_sum(_mask, 1)
 
     _mask_concat = tf.concat(_masked[:-1], 2)
     _masked = tf.reshape(_mask_concat, [-1, M, M, attention_steps * dim[1]])

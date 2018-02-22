@@ -4,10 +4,10 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=7
+export CUDA_VISIBLE_DEVICES=1
 
 METRIC='euclidean'
-HEADS='fc1024_inception_spatial_attention'
+HEADS='fc1024_inception_recurrent_attention'
 BACKBONE='inception'
 EXPR_NAME='_0'
 

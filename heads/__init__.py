@@ -6,4 +6,5 @@ HEAD_CHOICES = (
     'fc1024_normalize',
     'fc1024_spatial_attention',
     'fc1024_recurrent_attention',
+    'fc1024_inception_recurrent_attention',
 )

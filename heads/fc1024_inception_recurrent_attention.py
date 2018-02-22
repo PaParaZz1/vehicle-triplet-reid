@@ -3,7 +3,7 @@ from tensorflow.contrib import slim
 
 def head(endpoints, embedding_dim, is_training):
     
-    M = 7
+    M = 5
     L = M*M
     D = 64
     dim = [L, D]
@@ -25,7 +25,7 @@ def head(endpoints, embedding_dim, is_training):
             normalizer_fn=slim.batch_norm,
             normalizer_params=batch_norm_params):
         with slim.arg_scope([slim.batch_norm], **batch_norm_params):
-            attention_branch_conv = slim.conv2d(endpoints['resnet_v2_50/block4'], dim[1], [1, 1], scope='attention_branch_conv')
+            attention_branch_conv = slim.conv2d(endpoints['Mixed_7d'], dim[1], [1, 1], scope='attention_branch_conv')
             # create a BasicRNNCell
             features = tf.reshape(attention_branch_conv, [-1, dim[0], dim[1]], name='attention_branch_features')
             a_i = tf.reshape(features, [-1, dim[1]])
