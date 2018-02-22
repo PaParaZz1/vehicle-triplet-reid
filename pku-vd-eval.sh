@@ -1,10 +1,10 @@
 #!/bin/sh
 
 export CUDA_VISIBLE_DEVICES=0
-epoch=50000
+epoch=80000
 dataset_size='small_'
-# expr_dir='expr_attention_euclidean_fc1024_recurrent_attention_resnet_v2_50_0'
-expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_0'
+expr_dir='expr_attention_euclidean_fc1024_recurrent_attention_resnet_v2_50_0'
+# expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_0'
 # expr_dir='expr_attention_euclidean_fc1024_spatial_attention_resnet_v2_50_0'
 
 python ./evaluate.py \

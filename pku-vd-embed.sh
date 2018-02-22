@@ -1,13 +1,11 @@
 #!/bin/sh
 
 export CUDA_VISIBLE_DEVICES=0
-epoch=50000
+epoch=80000
 dataset_size=''
-# expr_dir='expr_attention_euclidean_fc1024_recurrent_attention_resnet_v2_50_0'
-expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_0'
+expr_dir='expr_attention_euclidean_fc1024_recurrent_attention_resnet_v2_50_0'
+# expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_0'
 # expr_dir='expr_attention_euclidean_fc1024_spatial_attention_resnet_v2_50_0'
-# expr_dir='expr_cls_euclidean_1.0_fc1024_cls_resnet_v2_50_1'
-# expr_dir='expr_cls_euclidean_1.0_fc1024_cls_projection_resnet_v2_50_anchorwise_cls_0'
 
 python embed.py \
         --experiment_root ./experiments/pku-vd/${expr_dir} \
