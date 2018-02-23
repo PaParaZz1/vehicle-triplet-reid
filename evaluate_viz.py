@@ -105,6 +105,8 @@ def main():
                 # Compute distance to all gallery embeddings
                 distances, pids, fids = sess.run([
                     batch_distances, batch_pids, batch_fids])
+                if args.display:
+                    _att_maps = sess.run([attention_map])
                 print('\rEvaluating batch {}-{}/{}'.format(
                         start_idx, start_idx + len(fids), len(query_fids)),
                       flush=True, end='')
@@ -133,6 +135,10 @@ def main():
             # arbitrary inversion, as long as it's monotonic and well-behaved,
             # it won't change anything.
             scores = 1 / (1 + distances)
+            print('variables: {}'.format(tf.GraphKeys.VARIABLES))
+            print('attention map')
+            print(_att_maps)
+            print(np.array(_att_maps).shape)
             for i in range(len(distances)):
                 # for each query instance
                 ap = average_precision_score(pid_matches[i], scores[i])
@@ -148,7 +154,8 @@ def main():
                 # Find the first true match and increment the cmc data from there on.
                 # print('match shape: {}'.format(pid_matches[i, np.argsort(distances[i])].shape))
                 k = np.where(pid_matches[i, np.argsort(distances[i])])[0][0]
-                if args.display:
+                # if args.display:
+                if False:
                     if not os.path.exists('./mismatched-5'):
                         os.mkdir('mismatched-5')
                     mismatched_idx = np.argsort(distances[i])[:k]

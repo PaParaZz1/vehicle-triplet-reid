@@ -21,6 +21,7 @@ def head(endpoints, embedding_dim, is_training):
             attention_branch_conv2 = slim.conv2d(attention_branch_conv1, 1, [1, 1], scope='attention_branch_conv2')
             attention_branch_mask = tf.sigmoid(attention_branch_conv2)
 
+    endpoints['attention_mask'] = attention_branch_mask
     _masked = attention_branch_mask * endpoints['resnet_v2_50/block4']
 
     endpoints['model_output'] = endpoints['global_pool'] = tf.reduce_mean(

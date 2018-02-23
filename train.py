@@ -367,6 +367,8 @@ def main():
     # Define a saver for the complete model.
     checkpoint_saver = tf.train.Saver(max_to_keep=0)
 
+    print('all variables: {}'.format(tf.all_variables()))
+
     with tf.Session(config=config) as sess:
         if args.resume:
             # In case we're resuming, simply load the full checkpoint to init.
