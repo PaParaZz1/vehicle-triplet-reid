@@ -55,9 +55,8 @@ def head(endpoints, embedding_dim, is_training):
                     _att = slim.fully_connected(inputs=e, num_outputs=1, scope='e2attention')
                     _alpha = tf.nn.softmax(tf.reshape(_att, [-1, dim[0]]))
                     attention_maps.append(_alpha)
-                    _mask = tf.multiply(features, tf.expand_dims(_alpha, 2)) * tf.reduce_min(tf.stack(signals, 1), 1)
-                    # _masked.append(tf.multiply(_mask, stop_check))
-                    _masked.append(_mask)
+                    _mask = tf.multiply(features, tf.expand_dims(_alpha, 2))
+                    _masked.append(_mask * tf.reduce_min(tf.stack(signals, 1), 1))
                     _input = tf.reduce_sum(_mask, 1)
 
     _mask_concat = tf.concat(_masked[:-1], 2)
