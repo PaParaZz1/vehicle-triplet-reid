@@ -15,5 +15,6 @@ def head(endpoints, embedding_dim, is_training):
     endpoints['emb'] = endpoints['emb_raw'] = slim.fully_connected(
         endpoints['head_output'], embedding_dim, activation_fn=None,
         weights_initializer=tf.orthogonal_initializer(), scope='emb')
+    print('endpoints: {}'.format(endpoints))
 
     return endpoints

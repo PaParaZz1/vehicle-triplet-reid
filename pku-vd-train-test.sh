@@ -4,12 +4,11 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=5
 
 METRIC='euclidean'
-HEADS='fc1024_spatial_attention'
+HEADS='fc1024'
 BACKBONE='resnet_v2_50'
-# EXPR_NAME='_0'
 EXPR_NAME='_test'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift

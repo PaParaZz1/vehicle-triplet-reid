@@ -4,13 +4,11 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=2
 
 METRIC='euclidean'
-# HEADS='fc1024_recurrent_attention_wstop'
-HEADS='fc1024_spatial_attention_softmax'
+HEADS='fc1024_mixed_attention'
 BACKBONE='resnet_v2_50'
-# EXPR_NAME='_0'
 EXPR_NAME='_finetune'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
@@ -35,7 +33,7 @@ python train.py \
     --metric ${METRIC} \
     --loss batch_hard \
     --head_name ${HEADS} \
-    --learning_rate 1e-5 \
+    --learning_rate 1e-4 \
     --train_iterations 400000 \
     --decay_start_iteration 0 \
     --lr_decay_factor 0.96 \
