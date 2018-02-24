@@ -219,7 +219,7 @@ def main():
             (len(data_fids) * len(modifiers), args.embedding_dim), np.float32)
         for start_idx in count(step=args.batch_size):
             try:
-                emb, _att_maps, _images, _fids = sess.run([endpoints['emb'], attention_mask, images, fids])
+                emb, _att_maps, _images, _fids, _pids = sess.run([endpoints['emb'], attention_mask, images, fids, pids])
                 print('\rEmbedded batch {}-{}/{}'.format(
                         start_idx, start_idx + len(emb), len(emb_storage)), 
                     flush=True, end='')
@@ -228,18 +228,20 @@ def main():
                 if not os.path.exists('attention_maps'):
                     os.mkdir('attention_maps')
                 print(np.array(_fids).shape)
-                _fids = [x.decode().split('/')[-1] for x in _fids]
+                _fids = [x.decode().split('/')[-1].split('.')[0] for x in _fids]
+                _pids = [x.decode() for x in _pids]
                 for i in range(len(_att_maps)):
-                    print('process image {}'.format(_fids[i]))
+                    print('process image {}:{}'.format(_pids[i], _fids[i]))
+                    print('statistics of map: max: {} | min: {} | mean: {}'.format(np.max(_att_maps[i][:]), np.min(_att_maps[i][:]), np.mean(_att_maps[i][:])))
                     _enlarged = cv2.resize(_att_maps[i], (224, 224), interpolation=cv2.INTER_CUBIC)
                     _enlarged = np.expand_dims(_enlarged, 2)
                     _masked = _enlarged * _images[i]
                     _masked.astype(np.uint8)
                     _enlarged = _enlarged * 255
 
-                    cv2.imwrite(os.path.join('attention_maps', '{}_origin.jpg'.format(_fids[i])), _images[i].astype(np.uint8))
-                    cv2.imwrite(os.path.join('attention_maps', '{}_masked.jpg'.format(_fids[i])), _masked)
-                    cv2.imwrite(os.path.join('attention_maps', '{}_mask.jpg'.format(_fids[i])), _enlarged.astype(np.uint8))
+                    cv2.imwrite(os.path.join('attention_maps', '{}_{}_origin.jpg'.format(_pids[i], _fids[i])), _images[i].astype(np.uint8))
+                    cv2.imwrite(os.path.join('attention_maps', '{}_{}_masked.jpg'.format(_pids[i], _fids[i])), _masked)
+                    cv2.imwrite(os.path.join('attention_maps', '{}_{}_mask.jpg'.format(_pids[i], _fids[i])), _enlarged.astype(np.uint8))
 
             except tf.errors.OutOfRangeError:
                 break  # This just indicates the end of the dataset.

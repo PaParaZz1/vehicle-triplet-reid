@@ -1,9 +1,10 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=0
-epoch=350000
+export CUDA_VISIBLE_DEVICES=2
+epoch=84000
 dataset_size=''
-expr_dir='expr_attention_euclidean_fc1024_spatial_attention_resnet_v2_50_0'
+expr_dir='expr_attention_euclidean_fc1024_spatial_attention_softmax_resnet_v2_50_finetune'
+# expr_dir='expr_attention_euclidean_fc1024_spatial_attention_resnet_v2_50_0'
 
 python embed_viz.py \
         --experiment_root ./experiments/pku-vd/${expr_dir} \

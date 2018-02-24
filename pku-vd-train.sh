@@ -7,7 +7,7 @@
 export CUDA_VISIBLE_DEVICES=1
 
 METRIC='euclidean'
-HEADS='fc1024_spatial_attention'
+HEADS='fc1024_spatial_attention_softmax'
 BACKBONE='resnet_v2_50'
 # EXPR_NAME='_0'
 EXPR_NAME='_test'

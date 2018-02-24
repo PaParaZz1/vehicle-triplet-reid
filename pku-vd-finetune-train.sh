@@ -4,10 +4,11 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=1
+export CUDA_VISIBLE_DEVICES=0
 
 METRIC='euclidean'
-HEADS='fc1024_recurrent_attention_wstop'
+# HEADS='fc1024_recurrent_attention_wstop'
+HEADS='fc1024_spatial_attention_softmax'
 BACKBONE='resnet_v2_50'
 # EXPR_NAME='_0'
 EXPR_NAME='_finetune'
