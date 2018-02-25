@@ -360,10 +360,10 @@ def main():
     # Feel free to try others!
     # optimizer = tf.train.AdadeltaOptimizer(learning_rate)
 
-    print('head_params: {}'.format(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, '^(?!{}).*$'.format(body_prefix))))
     # Update_ops are used to update batchnorm stats.
     with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-        train_op = optimizer.minimize(loss_mean, global_step=global_step)
+        train_op = optimizer.minimize(loss_mean, global_step=global_step, var_list=tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, '^(?!{}).*$'.format(body_prefix)))
+    print('head_params: {}'.format(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, '^(?!{}).*$'.format(body_prefix))))
 
     # Define a saver for the complete model.
     checkpoint_saver = tf.train.Saver(max_to_keep=0)
