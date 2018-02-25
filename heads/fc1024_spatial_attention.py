@@ -11,6 +11,7 @@ def head(endpoints, embedding_dim, is_training):
             }
     with slim.arg_scope(
             [slim.conv2d],
+            is_training=is_training,
             weights_regularizer=slim.l2_regularizer(0.0),
             weights_initializer=slim.variance_scaling_initializer(),
             activation_fn=tf.nn.relu,

@@ -15,13 +15,13 @@ def head(endpoints, embedding_dim, is_training):
             weights_initializer=slim.variance_scaling_initializer(),
             activation_fn=tf.nn.relu,
             normalizer_fn=slim.batch_norm,
-            normalizer_params=batch_norm_params, scope='head'):
+            normalizer_params=batch_norm_params):
         with slim.arg_scope([slim.batch_norm], **batch_norm_params):
             attention_branch_conv1 = slim.conv2d(endpoints['Mixed_7d'], 64, [1, 1], scope='attention_branch_conv1')
             attention_branch_conv2 = slim.conv2d(attention_branch_conv1, 1, [1, 1], scope='attention_branch_conv2')
             attention_branch_mask = tf.sigmoid(attention_branch_conv2)
 
-    _masked = attention_branch_mask * endpoints['Mixed_7d']
+    _masked = (tf.ones_like(attention_branch_mask) + attention_branch_mask) * endpoints['Mixed_7d']
 
     endpoints['model_output'] = endpoints['global_pool'] = tf.reduce_mean(
             _masked, [1, 2], name='_pool5', keep_dims=False)

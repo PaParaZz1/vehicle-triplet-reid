@@ -4,12 +4,12 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=6
+export CUDA_VISIBLE_DEVICES=5
 
 METRIC='euclidean'
-HEADS='fc1024_inception_spatial_attention'
+HEADS='fc1024_inception_multi-resolution_spatial_attention'
 BACKBONE='inception'
-EXPR_NAME='_finetune_1'
+EXPR_NAME='_finetune_0'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 # INIT_CHECKPT=./pretrained_models/inception_v4.ckpt ; shift
@@ -34,7 +34,7 @@ python train.py \
     --metric ${METRIC} \
     --loss batch_hard \
     --head_name ${HEADS} \
-    --learning_rate 1e-4 \
+    --learning_rate 1e-5 \
     --train_iterations 400000 \
     --decay_start_iteration 10000 \
     --lr_decay_factor 0.96 \

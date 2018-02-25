@@ -15,12 +15,16 @@ def head(endpoints, embedding_dim, is_training):
             weights_initializer=slim.variance_scaling_initializer(),
             activation_fn=tf.nn.relu,
             normalizer_fn=slim.batch_norm,
-            normalizer_params=batch_norm_params, scope='head'):
+            normalizer_params=batch_norm_params):
         with slim.arg_scope([slim.batch_norm], **batch_norm_params):
-            attention_branch_conv1 = slim.conv2d(endpoints['Mixed_7d'], 64, [1, 1], scope='attention_branch_conv1')
-            attention_branch_conv2 = slim.conv2d(attention_branch_conv1, 1, [1, 1], scope='attention_branch_conv2')
-            attention_branch_mask = tf.sigmoid(attention_branch_conv2)
+            attention_branch_projection = slim.conv2d(endpoints['Mixed_7d'], 256, [1, 1], scope='attention_branch_projection')
+            attention_branch_conv1 = slim.conv2d(attention_branch_projection, 64, [1, 1], scope='attention_branch_conv1')
+            attention_branch_conv2 = slim.conv2d(attention_branch_conv1, 64, [3, 3], scope='attention_branch_conv2')
+            attention_branch_conv3 = slim.conv2d(attention_branch_conv2, 256, [1, 1], scope='attention_branch_conv3')
+            attention_branch_residual = slim.conv2d(attention_branch_conv3 + attention_branch_projection, 1536, [1, 1], scope='attention_branch_residual')
+            attention_branch_mask = tf.sigmoid(attention_branch_residual)
 
+    endpoints['attention_mask'] = attention_branch_mask
     _masked = attention_branch_mask * endpoints['Mixed_7d']
 
     endpoints['model_output'] = endpoints['global_pool'] = tf.reduce_mean(
@@ -39,5 +43,7 @@ def head(endpoints, embedding_dim, is_training):
     endpoints['emb'] = endpoints['emb_raw'] = slim.fully_connected(
         endpoints['head_output'], embedding_dim, activation_fn=None,
         weights_initializer=tf.orthogonal_initializer(), scope='emb')
+
+    print('InceptionV4 endpoints: {}'.format(endpoints))
 
     return endpoints

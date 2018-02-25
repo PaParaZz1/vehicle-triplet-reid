@@ -1,11 +1,11 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=6
 epoch=0
 dataset_size=''
-expr_dir='expr_attention_euclidean_fc1024_mixed_attention_resnet_v2_50_finetune'
+# expr_dir='expr_attention_euclidean_fc1024_mixed_attention_resnet_v2_50_finetune'
 # expr_dir='expr_attention_euclidean_fc1024_spatial_attention_softmax_resnet_v2_50_finetune'
-# expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_finetune_1'
+expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_finetune_4'
 # expr_dir='expr_attention_euclidean_fc1024_recurrent_attention_wstop_resnet_v2_50_finetune'
 # expr_dir='expr_attention_euclidean_fc1024_recurrent_attention_resnet_v2_50_0'
 # expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_0'

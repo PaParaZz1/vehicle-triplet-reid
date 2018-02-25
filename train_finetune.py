@@ -297,7 +297,7 @@ def main():
     # Feed the image through the model. The returned `body_prefix` will be used
     # further down to load the pre-trained weights for all variables with this
     # prefix.
-    endpoints, body_prefix = model.endpoints(images, is_training=True)
+    endpoints, body_prefix = model.endpoints(images, is_training=False)
     with tf.name_scope('head'):
         endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
 
@@ -360,6 +360,7 @@ def main():
     # Feel free to try others!
     # optimizer = tf.train.AdadeltaOptimizer(learning_rate)
 
+    print('head_params: {}'.format(tf.get_collection(tf.GraphKeys.TRAINABLE_VARIABLES, '^(?!{}).*$'.format(body_prefix))))
     # Update_ops are used to update batchnorm stats.
     with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
         train_op = optimizer.minimize(loss_mean, global_step=global_step)

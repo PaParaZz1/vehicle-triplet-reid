@@ -4,18 +4,25 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=4
 
 METRIC='euclidean'
-HEADS='fc1024_mixed_attention'
-BACKBONE='resnet_v2_50'
-EXPR_NAME='_finetune'
+HEADS='fc1024_inception_spatial_attention'
+BACKBONE='inception'
+EXPR_NAME='_fixed_finetune_0'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
-INIT_CHECKPT=./experiments/pku-vd/pku-vd_resnet50_v2_results/checkpoint-360000 ; shift
+if [ ${BACKBONE} == 'resnet_v2_50' ]; then
+    INIT_CHECKPT=./experiments/pku-vd/pku-vd_resnet50_v2_results/checkpoint-360000 ; shift
+elif [ ${BACKBONE} == 'inception' ]; then
+    INIT_CHECKPT=./experiments/pku-vd/ckpt_inception_v4/checkpoint-285886 ; shift
+else
+    echo 'Wrong Backbone Networks name'
+    exit 9
+fi
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
 
-python train.py \
+python train_finetune.py \
     --train_set data/pku-vd/VD1_train.csv \
     --model_name ${BACKBONE} \
     --image_root $IMAGE_ROOT \
