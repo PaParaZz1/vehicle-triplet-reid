@@ -5,7 +5,7 @@ def head(endpoints, embedding_dim, is_training):
 
     head_num = 4
     CONSTRAINT_WEIGHT = 1e-2
-    feature_size = 7
+    feature_size = 5
 
     batch_norm_params = {
             'decay': 0.9,
@@ -22,7 +22,7 @@ def head(endpoints, embedding_dim, is_training):
             normalizer_fn=slim.batch_norm,
             normalizer_params=batch_norm_params):
         with slim.arg_scope([slim.batch_norm], **batch_norm_params):
-            attention_projection = slim.conv2d(endpoints['resnet_v2_50/block4'], 512, [1, 1], scope='attention_projection')
+            attention_projection = slim.conv2d(endpoints['Mixed_7d'], 512, [1, 1], scope='attention_projection')
             masks = []
             masked_maps = []
             for i in range(head_num):
