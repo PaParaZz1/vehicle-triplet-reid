@@ -14,6 +14,7 @@ HEAD_CHOICES = (
     'fc1024_inception_mixed_attention',
     'fc1024_inception_multi-resolution_spatial_attention',
     'fc1024_inception_multi-head_attention',
+    'fc1024_inception_min-max_spatial_attention', 
     'fc1024_residual_attention-heavy',
     'fc1024_mixed_attention',
     'fc1024_multi-resolution_spatial_attention',
