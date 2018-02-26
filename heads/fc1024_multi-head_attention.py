@@ -2,6 +2,10 @@ import tensorflow as tf
 from tensorflow.contrib import slim
 
 def head(endpoints, embedding_dim, is_training):
+
+    head_num = 4
+    CONSTRAINT_WEIGHT = 1e-2
+
     batch_norm_params = {
             'decay': 0.9,
             'epsilon': 1e-5,
@@ -20,12 +24,16 @@ def head(endpoints, embedding_dim, is_training):
             attention_projection = slim.conv2d(endpoints['resnet_v2_50/block4'], 512, [1, 1], scope='attention_projection')
             masks = []
             masked_maps = []
-            for i in range(4):
+            for i in range(head_num):
                 attention_branch_mask = attention_branch(attention_projection, i)
                 masks.append(attention_branch_mask)
                 endpoints['attention_mask{}'.format(i)] = attention_branch_mask
                 masked_map = attention_branch_mask * attention_projection
                 masked_maps.append(masked_map)
+
+            for i in range(head_num):
+                for j in range(i + 1, head_num):
+                    kl_divergence(masks[i], masks[j], 'constraint_{}{}'.format(i, j))
 
     _masked = tf.concat(masked_maps, axis=3, name='concated_mask')
 
@@ -53,3 +61,14 @@ def attention_branch(_input, name):
     attention_branch_conv2 = slim.conv2d(attention_branch_conv1, 1, [1, 1], scope='attention_branch{}_conv2'.format(name))
     attention_branch_mask = tf.sigmoid(attention_branch_conv2, name='attention_branch{}_mask'.format(name))
     return attention_branch_mask
+
+def kl_divergence(mask_a, mask_b, prefix):
+    vector_a = tf.reshape(mask_a, [-1, 7*7], name='{}_vector_a'.format(prefix))
+    vector_b = tf.reshape(mask_b, [-1, 7*7], name='{}_vector_b'.format(prefix))
+    dist_a = tf.divide(vector_a, tf.reduce_sum(vector_a, 1), name='{}_dist_a'.format(prefix))
+    dist_b = tf.divide(vector_b, tf.reduce_sum(vector_b, 1), name='{}_dist_b'.format(prefix))
+    kl_div_ab = tf.distributions.kl_divergence(dist_a, dist_b, name='{}_kl_div_ab'.format(prefix))
+    kl_div_ba = tf.distributions.kl_divergence(dist_b, dist_a, name='{}_kl_div_ba'.format(prefix))
+    kl_div = - CONSTRAINT_WEIGHT * (kl_div_ab + kl_div_ba) / 2
+    tf.losses.add_loss(kl_div)
+    
