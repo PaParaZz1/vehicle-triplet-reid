@@ -1,11 +1,11 @@
 import tensorflow as tf
 from tensorflow.contrib import slim
 
-def head(endpoints, embedding_dim, is_training):
+head_num = 4
+CONSTRAINT_WEIGHT = 0.0
+feature_size = 5
 
-    head_num = 4
-    CONSTRAINT_WEIGHT = 1e-2
-    feature_size = 5
+def head(endpoints, embedding_dim, is_training):
 
     batch_norm_params = {
             'decay': 0.9,
@@ -34,7 +34,7 @@ def head(endpoints, embedding_dim, is_training):
 
             for i in range(head_num):
                 for j in range(i + 1, head_num):
-                    kl_divergence(masks[i], masks[j], 'constraint_{}{}'.format(i, j))
+                    cosine_similarity(masks[i], masks[j], 'constraint_{}{}'.format(i, j))
 
     _masked = tf.concat(masked_maps, axis=3, name='concated_mask')
 
@@ -58,7 +58,7 @@ def head(endpoints, embedding_dim, is_training):
     return endpoints
 
 def attention_branch(_input, name):
-    attention_branch_conv1 = slim.conv2d(endpoints['resnet_v2_50/block4'], 64, [1, 1], scope='attention_branch{}_conv1'.format(name))
+    attention_branch_conv1 = slim.conv2d(_input, 64, [1, 1], scope='attention_branch{}_conv1'.format(name))
     attention_branch_conv2 = slim.conv2d(attention_branch_conv1, 1, [1, 1], scope='attention_branch{}_conv2'.format(name))
     attention_branch_mask = tf.sigmoid(attention_branch_conv2, name='attention_branch{}_mask'.format(name))
     return attention_branch_mask
@@ -73,3 +73,11 @@ def kl_divergence(mask_a, mask_b, prefix):
     kl_div = - CONSTRAINT_WEIGHT * (kl_div_ab + kl_div_ba) / 2
     tf.losses.add_loss(kl_div)
     
+def cosine_similarity(mask_a, mask_b, prefix):
+    
+    vector_a = tf.reshape(mask_a, [-1, feature_size ** 2], name='{}_vector_a'.format(prefix))
+    vector_b = tf.reshape(mask_b, [-1, feature_size ** 2], name='{}_vector_b'.format(prefix))
+    dist_a = tf.divide(vector_a, tf.sqrt(tf.reduce_sum(tf.square(vector_a), 1)), name='{}_dist_a'.format(prefix))
+    dist_b = tf.divide(vector_b, tf.sqrt(tf.reduce_sum(tf.square(vector_b), 1)), name='{}_dist_b'.format(prefix))
+    cosine_sim = CONSTRAINT_WEIGHT * tf.multiply(dist_a, dist_b, name='{}_cosine_similarity'.format(prefix))
+    tf.losses.add_loss(cosine_sim)
