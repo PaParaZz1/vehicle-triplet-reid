@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.contrib import slim
 
 head_num = 4
-CONSTRAINT_WEIGHT = 0.0
+CONSTRAINT_WEIGHT = 1.0
 feature_size = 5
 
 def head(endpoints, embedding_dim, is_training):
@@ -25,6 +25,7 @@ def head(endpoints, embedding_dim, is_training):
             attention_projection = slim.conv2d(endpoints['Mixed_7d'], 512, [1, 1], scope='attention_projection')
             masks = []
             masked_maps = []
+            masked_maps.append(attention_projection)
             for i in range(head_num):
                 attention_branch_mask = attention_branch(attention_projection, i)
                 masks.append(attention_branch_mask)
