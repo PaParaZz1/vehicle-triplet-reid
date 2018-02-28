@@ -22,15 +22,16 @@ def head(endpoints, embedding_dim, is_training):
             normalizer_fn=slim.batch_norm,
             normalizer_params=batch_norm_params):
         with slim.arg_scope([slim.batch_norm], **batch_norm_params):
-            attention_projection = slim.conv2d(endpoints['Mixed_7d'], 512, [1, 1], scope='attention_projection')
+            # attention_projection = slim.conv2d(endpoints['Mixed_7d'], 512, [1, 1], scope='attention_projection')
             masks = []
             masked_maps = []
-            masked_maps.append(attention_projection)
             for i in range(head_num):
-                attention_branch_mask = attention_branch(attention_projection, i)
+                attention_branch_mask = attention_branch(endpoints['Mixed_7d'], i)
+                # attention_branch_mask = attention_branch(attention_projection, i)
                 masks.append(attention_branch_mask)
                 endpoints['attention_mask{}'.format(i)] = attention_branch_mask
-                masked_map = attention_branch_mask * attention_projection
+                masked_map = (1 + attention_branch_mask) * endpoints['Mixed_7d']
+                # masked_map = (1 + attention_branch_mask) * attention_projection
                 masked_maps.append(masked_map)
 
             for i in range(head_num):
