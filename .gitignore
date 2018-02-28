@@ -18,3 +18,10 @@ DARQN/
 deep-rl-tensorflow/
 gym/
 rl-multishot-reid/
+
+# ignore some scripts
+pku-vd-embed.sh
+pku-vd-embed-viz.sh
+pku-vd-finetune-train.sh
+pku-vd-inception-train.sh
+pku-vd-train.sh
