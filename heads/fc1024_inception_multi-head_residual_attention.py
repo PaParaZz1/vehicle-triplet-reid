@@ -25,7 +25,7 @@ def head(endpoints, embedding_dim, is_training):
             attention_projection = slim.conv2d(endpoints['Mixed_7d'], 512, [1, 1], scope='attention_projection')
             masks = []
             masked_maps = []
-            # masked_maps.append(attention_projection)
+            masked_maps.append(attention_projection)
             for i in range(head_num):
                 attention_branch_mask = attention_branch(attention_projection, i)
                 masks.append(attention_branch_mask)
