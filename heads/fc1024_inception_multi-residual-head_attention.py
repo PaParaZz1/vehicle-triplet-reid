@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.contrib import slim
 
 head_num = 4
-CONSTRAINT_WEIGHT = 0.01
+CONSTRAINT_WEIGHT = 1.0
 feature_size = 5
 
 def head(endpoints, embedding_dim, is_training):
