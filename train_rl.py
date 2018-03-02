@@ -18,6 +18,7 @@ import lbtoolbox as lb
 import loss
 from nets import NET_CHOICES
 from heads import HEAD_CHOICES
+from RL_utils import TripletStorage, PolicyGradient
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -31,6 +32,12 @@ PATCH_STRIDE = 8
 # total number of actions is [(224-8)/8]^2 + 1 = 730
 # in spite of termial action, each action indicates the index of top-left corner of patch
 ACTION_NUMS = 730
+
+Agent = PolicyGradient(
+        n_actions=ACTION_NUMS,
+        n_features=1024,
+        learning_rate=0.02,
+        reward_decay=0.995,)
 
 
 # Required.
@@ -302,7 +309,8 @@ def main():
     dataset = dataset.prefetch(1)
 
     # Since we repeat the data infinitely, we only need a one-shot iterator.
-    images, fids, pids = dataset.make_one_shot_iterator().get_next()
+    train_iter = dataset.make_one_shot_iterator()
+    # images, fids, pids = train_iter.get_next()
 
     print('dataset | output_types: {} | output_shapes: {}'.format(dataset.output_types, dataset.output_shapes))
     # output_types: (tf.float32, tf.string, tf.string)
@@ -312,7 +320,7 @@ def main():
     handle = tf.placeholder(tf.string, shape=[])
     iterator = tf.data.Iterator.from_string_handle(
                 handle, dataset.output_types, dataset.output_shapes)
-    next_element = iterator.get_next()
+    images, fids, pids = iterator.get_next()
 
     # Create the model and an embedding head.
     model = import_module('nets.' + args.model_name)
@@ -329,7 +337,7 @@ def main():
     # 1. Compute all pairwise distances according to the specified metric.
     # 2. For each anchor along the first dimension, compute its loss.
     dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
-    losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
+    losses, train_top1, prec_at_k, _, neg_dists, pos_dists, pos_indices, neg_indices = loss.LOSS_CHOICES[args.loss](
         dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
 
     # Count the number of active entries, and compute the total batch loss.
@@ -416,17 +424,53 @@ def main():
         start_step = sess.run(global_step)
         log.info('Starting training from iteration {}.'.format(start_step))
 
+        # initialize train data handle
+        train_handle = sess.run(train_iter.string_handle())
+
+        # initialize storage for triplet embeddings and previous triplet loss
+        triplet_storage = TripletStorage()
+
         # Finally, here comes the main-loop. This `Uninterrupt` is a handy
         # utility such that an iteration still finishes on Ctrl+C and we can
         # stop the training cleanly.
         with lb.Uninterrupt(sigs=[SIGINT, SIGTERM], verbose=True) as u:
             for i in range(start_step, args.train_iterations):
+                # Just forward to get triplets and images, no updates
+                start_time = time.time()
+                b_imgs, b_embs, b_loss, b_fids, b_pids, \
+                _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
+                    sess.run([images, endpoints['emb'], losses, fids, pids, \
+                    pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
+                elapsed_time = time.time() - start_time
+                triplet_storage.add_storage(b_embs[_pos_indices], b_embs[_neg_indices], b_loss)
+
+                # start to do reinforcement learning
+
+                for _ in range(MAX_PLAY_STEP):
+                    action = 
+
+
+
+
+
+
+
+                break
+
+
+
+
+
+
+
 
                 # Compute gradients, update weights, store logs!
                 start_time = time.time()
-                _, summary, step, b_prec_at_k, b_embs, b_loss, b_fids = \
-                    sess.run([train_op, merged_summary, global_step,
-                              prec_at_k, endpoints['emb'], losses, fids])
+                _, summary, step, b_prec_at_k, b_embs, b_loss, b_fids, \
+                _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
+                    sess.run([train_op, merged_summary, global_step, \
+                    prec_at_k, endpoints['emb'], losses, fids, \
+                    pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
                 elapsed_time = time.time() - start_time
 
                 # Compute the iteration speed and add it to the summary.

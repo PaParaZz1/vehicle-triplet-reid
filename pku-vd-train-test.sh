@@ -4,7 +4,7 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=1
 
 METRIC='euclidean'
 HEADS='fc1024'

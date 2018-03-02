@@ -124,23 +124,28 @@ class PolicyGradient:
 class TripletStorage(object):
     
     def __init__(self):
-        self.triplets = []
+        self.triplet_loss = None
+        self.pos_embs = None
+        self.neg_embs = None
 
-    def add_storage(self, indexs, losses):
-        for i in range(len(indexs)):
-            self.triplets.append(Triplet(indexs[i], losses[i]))
+    def add_storage(self, pos_embs, neg_embs, losses):
+        self.triplet_loss = losses
+        self.pos_embs = pos_embs
+        self.neg_embs = neg_embs
 
     def update_loss(self, losses):
-        assert len(self.triplets) == len(losses)
-        for i in range(len(self.triplets)):
-            self.triplets[i].triplet_loss = losses[i]
+        self.triplet_loss = losses
 
     def clear_storage(self):
-        self.triplets = []
+        self.triplet_loss = None
+        self.pos_embs = None
+        self.neg_embs = None
 
 
+'''
 class Triplet(object):
 
     def __init__(self, index, loss):
         self.idx = index
         self.triplet_loss = loss
+'''
