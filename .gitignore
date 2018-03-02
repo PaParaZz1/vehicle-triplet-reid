@@ -25,3 +25,5 @@ pku-vd-embed-viz.sh
 pku-vd-finetune-train.sh
 pku-vd-inception-train.sh
 pku-vd-train.sh
+
+Reinforcement-learning-with-tensorflow/*

@@ -4,7 +4,7 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=5
+export CUDA_VISIBLE_DEVICES=2
 
 METRIC='euclidean'
 HEADS='fc1024'
@@ -15,7 +15,7 @@ IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
 
-python train.py \
+python train_rl.py \
     --train_set data/pku-vd/VD1_train.csv \
     --model_name ${BACKBONE} \
     --image_root $IMAGE_ROOT \
