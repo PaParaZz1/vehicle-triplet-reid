@@ -1,7 +1,7 @@
 import tensorflow as tf
 
 # from nets.inception_v4 import inception_v4, inception_arg_scope
-from nets.inception_v4 import inception_v4
+from nets.inception_v4_attention import inception_v4
 from nets.inception_utils import inception_arg_scope
 
 _RGB_MEAN = [123.68, 116.78, 103.94]

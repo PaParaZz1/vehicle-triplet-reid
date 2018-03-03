@@ -170,11 +170,11 @@ def inception_v4_base(inputs, final_endpoint='Mixed_7d', scope=None):
     end_points[name] = net
     return name == final_endpoint
 
-  def attention_block(_input):
-      conv1 = slim.conv2d(_input, 64, [1, 1])
-      conv2 = slim.conv2d(conv1, 32, [3, 3])
-      conv3 = slim.conv2d(conv2, 64, [1, 1])
-      _mask = tf.sigmoid(conv3)
+  def attention_block(_input, channels):
+      conv1 = slim.conv2d(_input, 64, [1, 1], scope='low_attention_conv1')
+      conv2 = slim.conv2d(conv1, 256, [3, 3], scope='low_attention_conv2')
+      conv3 = slim.conv2d(conv2, 1024, [1, 1], scope='low_attention_conv3')
+      _mask = tf.sigmoid(conv3, name='low_attention_mask')
       return (1 + _mask) * _input
 
   with tf.variable_scope(scope, 'InceptionV4', [inputs]):
@@ -192,7 +192,6 @@ def inception_v4_base(inputs, final_endpoint='Mixed_7d', scope=None):
       net = slim.conv2d(net, 64, [3, 3], scope='Conv2d_2b_3x3')
       if add_and_check_final('Conv2d_2b_3x3', net): return net, end_points
       # 147 x 147 x 64
-      net = attention_block(net)
       with tf.variable_scope('Mixed_3a'):
         with tf.variable_scope('Branch_0'):
           branch_0 = slim.max_pool2d(net, [3, 3], stride=2, padding='VALID',
@@ -247,6 +246,7 @@ def inception_v4_base(inputs, final_endpoint='Mixed_7d', scope=None):
         block_scope = 'Mixed_6' + chr(ord('b') + idx)
         net = block_inception_b(net, block_scope)
         if add_and_check_final(block_scope, net): return net, end_points
+      net = attention_block(net, 1024)
 
       # 17 x 17 x 1024
       # Reduction-B block

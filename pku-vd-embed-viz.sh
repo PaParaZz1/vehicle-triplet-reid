@@ -1,10 +1,9 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=2
-epoch=84000
+export CUDA_VISIBLE_DEVICES=6
+epoch=150000
 dataset_size=''
-expr_dir='expr_attention_euclidean_fc1024_spatial_attention_softmax_resnet_v2_50_finetune'
-# expr_dir='expr_attention_euclidean_fc1024_spatial_attention_resnet_v2_50_0'
+expr_dir='expr_attention_euclidean_fc1024_inception_multi-residual-head_attention_inception_finetune_0'
 
 python embed_viz.py \
         --experiment_root ./experiments/pku-vd/${expr_dir} \

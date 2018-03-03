@@ -1,18 +1,15 @@
 __pycache__
 *.sw[a-z]
 *.pyc
-<<<<<<< HEAD
 experiments/
 pretrained_models/
 venv/
 data/
-=======
 experiments/*
 pretrained_models/*
 venv/*
 data/*
 !data/create_dataset.py
->>>>>>> 731a1caecb797c885bdbec0c75e6823d1722d5da
 nets.bak/
 DARQN/
 deep-rl-tensorflow/
