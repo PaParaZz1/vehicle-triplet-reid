@@ -55,27 +55,32 @@ class PolicyGradient:
                 }
         with slim.arg_scope(
                 [slim.fully_connected, slim.conv2d],
-                is_training=True,
+                # is_training=True,
                 weights_regularizer=slim.l2_regularizer(0.0),
                 weights_initializer=slim.variance_scaling_initializer(),
                 activation_fn=tf.nn.relu,
                 normalizer_fn=slim.batch_norm,
                 normalizer_params=batch_norm_params):
-            with slim.arg_scope(slim.batch_norm), **batch_norm_params):
+            with slim.arg_scope([slim.batch_norm], **batch_norm_params):
                 with tf.name_scope('inputs'):
                     self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="observations")
                     self.tf_acts = tf.placeholder(tf.int32, [None, ], name="actions_num")
                     self.tf_vt = tf.placeholder(tf.float32, [None, ], name="actions_value")
         
-                    dense1 = slim.fully_connected(inputs=self.tf_obs, 1024, scope='dense1')
-                    dense2 = slim.fully_connected(inputs=dense1, 1024, scope='dense2')
-                    dense3 = slim.fully_connected(inputs=dense2, 1024, scope='dense3')
+                    '''
+                    dense1 = slim.fully_connected(self.tf_obs, 1024, scope='dense1')
+                    dense2 = slim.fully_connected(dense1, 1024, scope='dense2')
+                    dense3 = slim.fully_connected(dense2, 1024, scope='dense3')
+                    dense4 = slim.fully_connected(dense3, self.n_actions, scope='dense4')
+                    '''
+                    dense1 = slim.fully_connected(self.tf_obs, 256, scope='dense1')
+                    dense2 = slim.fully_connected(dense1, self.n_actions, scope='dense2')
 
-                    self.all_act_prob = tf.nn.softmax(dense3, name='act_prob')  # use softmax to convert to probability
+                    self.all_act_prob = tf.nn.softmax(dense2, name='act_prob')  # use softmax to convert to probability
 
                 with tf.name_scope('loss'):
                     # to maximize total reward (log_p * R) is to minimize -(log_p * R), and the tf only have minimize(loss)
-                    neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=all_act, labels=self.tf_acts)   # this is negative log of chosen action
+                    neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=dense2, labels=self.tf_acts)   # this is negative log of chosen action
                     # or in this way:
                     # neg_log_prob = tf.reduce_sum(-tf.log(self.all_act_prob)*tf.one_hot(self.tf_acts, self.n_actions), axis=1)
                     loss = tf.reduce_mean(neg_log_prob * self.tf_vt)  # reward guided loss
@@ -84,8 +89,10 @@ class PolicyGradient:
                     self.train_op = tf.train.AdamOptimizer(self.lr).minimize(loss)
 
     def choose_action(self, observation):
-        prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: observation[np.newaxis, :]})
-        action = np.random.choice(range(prob_weights.shape[1]), p=prob_weights.ravel())  # select action w.r.t the actions prob
+        # prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: observation[np.newaxis, :]})
+        prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: observation})
+        # action = np.random.choice(range(prob_weights.shape[1]), p=prob_weights.ravel())  # select action w.r.t the actions prob
+        action = [np.random.choice(range(prob_weights.shape[1]), p=prob_weights[i]) for i in range(len(prob_weights))]
         return action
 
     def store_transition(self, s, a, r):
@@ -135,6 +142,13 @@ class TripletStorage(object):
 
     def update_loss(self, losses):
         self.triplet_loss = losses
+
+    def get_loss(self):
+        return self.triplet_loss
+
+    def get_pos_embs(self): return self.pos_embs
+
+    def get_neg_embs(self): return self.neg_embs
 
     def clear_storage(self):
         self.triplet_loss = None

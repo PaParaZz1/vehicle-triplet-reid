@@ -32,16 +32,10 @@ PATCH_STRIDE = 8
 # total number of actions is [(224-8)/8]^2 + 1 = 730
 # in spite of termial action, each action indicates the index of top-left corner of patch
 ACTION_NUMS = 730
-
-Agent = PolicyGradient(
-        n_actions=ACTION_NUMS,
-        n_features=1024,
-        learning_rate=0.02,
-        reward_decay=0.995,)
+EPSILON = 0.1
 
 
 # Required.
-
 parser.add_argument(
     '--experiment_root', required=True, type=common.writeable_directory,
     help='Location used to store checkpoints and dumped data.')
@@ -191,9 +185,7 @@ def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
     return selected_fids, tf.fill([batch_k], pid)
 
 
-def calc_triplet_reward(triplet_storage, triplet_losses):
-
-    pass
+def dist(a, b): return np.sqrt(np.sum(np.square(a-b), axis=1) + 1e-12)
 
 
 def main():
@@ -242,6 +234,15 @@ def main():
         # and readable format.
         with open(args_file, 'w') as f:
             json.dump(vars(args), f, ensure_ascii=False, indent=2, sort_keys=True)
+
+
+    # create agent
+    Agent = PolicyGradient(
+            n_actions=ACTION_NUMS,
+            n_features=args.embedding_dim,
+            learning_rate=0.02,
+            reward_decay=0.995,)
+
 
     log_file = os.path.join(args.experiment_root, "train")
     logging.config.dictConfig(common.get_logging_dict(log_file))
@@ -441,36 +442,55 @@ def main():
                 _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
                     sess.run([images, endpoints['emb'], losses, fids, pids, \
                     pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
-                elapsed_time = time.time() - start_time
+                # elapsed_time = time.time() - start_time
                 triplet_storage.add_storage(b_embs[_pos_indices], b_embs[_neg_indices], b_loss)
 
                 # start to do reinforcement learning
+                finish_flag = np.zeros(args.batch_p * args.batch_k, dtype=np.int)
+                for rlstep in range(MAX_PLAY_STEP):
+                    action = Agent.choose_action(b_embs)
+                    for a_idx in range(len(action)):
+                        if finish_flag[a_idx] == 1:
+                            continue
+                        if np.random.random() < EPSILON:
+                            action[a_idx] = np.random.randint(0, ACTION_NUMS)
+                        if action[a_idx] == ACTION_NUMS - 1:
+                            finish_flag[a_idx] = 1
+                            continue
+                    
+                        x1, y1 = np.array(np.unravel_index(action[a_idx], (27, 27))) * PATCH_STRIDE
+                        x2, y2 = np.maximum((223, 223), np.array([x1, y1]) + 16)
+                        b_imgs[a_idx][x1:x2, y1:y2, :] = 0
+                    
+                    rl_iter = tf.data.Dataset.from_tensor_slices((b_imgs, b_fids, b_pids)).repeat().batch(args.batch_p * args.batch_k).make_one_shot_iterator()
+                    rl_handle = sess.run(rl_iter.string_handle())
+                    
+                    b_imgs, b_embs = sess.run([images, endpoints['emb']], feed_dict={handle:rl_handle})
+                    cur_loss = dist(b_embs, triplet_storage.get_neg_embs()) - dist(b_embs, triplet_storage.get_pos_embs())
+                    reward = cur_loss - triplet_storage.get_loss()
+                    for a_idx in range(len(action)):
+                        if reward[a_idx] < 1e-8:
+                            finish_flag[a_idx] = 1
+                    triplet_storage.update_loss(cur_loss)
+                    Agent.store_transition(b_embs, action, reward)
 
-                for _ in range(MAX_PLAY_STEP):
-                    action = 
+                    print('Reinforcement Learning | Step {} | reward {}'.format(rlstep, np.mean(reward)))
 
+                    if np.sum(finish_flag) == args.batch_p * args.batch_k:
+                        break
 
+                Agent.learn()
 
-
-
-
-
-                break
-
-
-
-
-
-
-
+                supervise_iter = tf.data.Dataset.from_tensor_slices((b_imgs, b_fids, b_pids)).repeat().batch(args.batch_p * args.batch_k).make_one_shot_iterator()
+                supervise_handle = sess.run(supervise_iter.string_handle())
 
                 # Compute gradients, update weights, store logs!
-                start_time = time.time()
+                # start_time = time.time()
                 _, summary, step, b_prec_at_k, b_embs, b_loss, b_fids, \
                 _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
                     sess.run([train_op, merged_summary, global_step, \
                     prec_at_k, endpoints['emb'], losses, fids, \
-                    pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
+                    pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:supervise_handle})
                 elapsed_time = time.time() - start_time
 
                 # Compute the iteration speed and add it to the summary.
