@@ -442,7 +442,6 @@ def main():
                 _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
                     sess.run([images, endpoints['emb'], losses, fids, pids, \
                     pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
-                # elapsed_time = time.time() - start_time
                 triplet_storage.add_storage(b_embs[_pos_indices], b_embs[_neg_indices], b_loss)
 
                 # start to do reinforcement learning
