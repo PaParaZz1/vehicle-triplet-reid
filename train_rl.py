@@ -10,6 +10,9 @@ import time
 
 import json
 import numpy as np
+# from scipy import stats
+import cv2
+import copy
 import tensorflow as tf
 from tensorflow.contrib import slim
 
@@ -28,6 +31,7 @@ parser = ArgumentParser(description='Train a ReID network.')
 # set params for reinforcement learning
 MAX_PLAY_STEP = 25
 PATCH_W, PATCH_H = 16, 16
+# PATCH_W, PATCH_H = 32, 32
 PATCH_STRIDE = 8 
 # total number of actions is [(224-8)/8]^2 + 1 = 730
 # in spite of termial action, each action indicates the index of top-left corner of patch
@@ -185,7 +189,7 @@ def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
     return selected_fids, tf.fill([batch_k], pid)
 
 
-def dist(a, b): return np.sqrt(np.sum(np.square(a-b), axis=1) + 1e-12)
+def dist(a, b): return np.sqrt(np.sum(np.square(a-b)) + 1e-12)
 
 
 def main():
@@ -235,13 +239,6 @@ def main():
         with open(args_file, 'w') as f:
             json.dump(vars(args), f, ensure_ascii=False, indent=2, sort_keys=True)
 
-
-    # create agent
-    Agent = PolicyGradient(
-            n_actions=ACTION_NUMS,
-            n_features=args.embedding_dim,
-            learning_rate=0.02,
-            reward_decay=0.995,)
 
 
     log_file = os.path.join(args.experiment_root, "train")
@@ -313,7 +310,6 @@ def main():
     train_iter = dataset.make_one_shot_iterator()
     # images, fids, pids = train_iter.get_next()
 
-    print('dataset | output_types: {} | output_shapes: {}'.format(dataset.output_types, dataset.output_shapes))
     # output_types: (tf.float32, tf.string, tf.string)
     # output_shapes: ((None, 224, 224, 3), (None), (None))
 
@@ -322,6 +318,14 @@ def main():
     iterator = tf.data.Iterator.from_string_handle(
                 handle, dataset.output_types, dataset.output_shapes)
     images, fids, pids = iterator.get_next()
+
+    image_holder = tf.placeholder(tf.float32, shape=[None, 224, 224, 3])
+    fid_holder = tf.placeholder(tf.string, shape=[None])
+    pid_holder = tf.placeholder(tf.string, shape=[None])
+    # rl_dataset = tf.data.Dataset.from_tensor_slices((image_holder, fid_holder, pid_holder)).batch(1).prefetch(1)
+    # rl_dataset = tf.data.Dataset.from_tensor_slices((image_holder, fid_holder, pid_holder))
+    rl_dataset = tf.data.Dataset.from_tensors((image_holder, fid_holder, pid_holder))
+    rl_iter = rl_dataset.make_initializable_iterator()
 
     # Create the model and an embedding head.
     model = import_module('nets.' + args.model_name)
@@ -401,6 +405,15 @@ def main():
     checkpoint_saver = tf.train.Saver(max_to_keep=0)
 
     with tf.Session(config=config) as sess:
+        # create agent
+        Agent = PolicyGradient(
+                n_actions=ACTION_NUMS,
+                n_features=args.embedding_dim,
+                sess=sess,
+                learning_rate=0.01,
+                reward_decay=0.995,
+                )
+
         if args.resume:
             # In case we're resuming, simply load the full checkpoint to init.
             last_checkpoint = tf.train.latest_checkpoint(args.experiment_root)
@@ -427,6 +440,7 @@ def main():
 
         # initialize train data handle
         train_handle = sess.run(train_iter.string_handle())
+        rl_handle = sess.run(rl_iter.string_handle())
 
         # initialize storage for triplet embeddings and previous triplet loss
         triplet_storage = TripletStorage()
@@ -442,49 +456,66 @@ def main():
                 _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
                     sess.run([images, endpoints['emb'], losses, fids, pids, \
                     pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
-                triplet_storage.add_storage(b_embs[_pos_indices], b_embs[_neg_indices], b_loss)
+                triplet_storage.add_storage(copy.deepcopy(b_embs), copy.deepcopy(b_embs[_pos_indices]), copy.deepcopy(b_embs[_neg_indices]), copy.deepcopy(b_loss))
+                print('anchor {} | pos {}'.format(b_embs.shape, b_embs[_pos_indices].shape))
 
                 # start to do reinforcement learning
-                finish_flag = np.zeros(args.batch_p * args.batch_k, dtype=np.int)
-                for rlstep in range(MAX_PLAY_STEP):
-                    action = Agent.choose_action(b_embs)
-                    for a_idx in range(len(action)):
-                        if finish_flag[a_idx] == 1:
-                            continue
-                        if np.random.random() < EPSILON:
-                            action[a_idx] = np.random.randint(0, ACTION_NUMS)
-                        if action[a_idx] == ACTION_NUMS - 1:
-                            finish_flag[a_idx] = 1
-                            continue
+                sorted_agent = np.random.choice(range(args.batch_p * args.batch_k), 5)
+                for agent_idx in sorted_agent:
+                    cur_embeddings = triplet_storage.get_anchor_embs(agent_idx)
+                    cur_img = b_imgs[agent_idx]
+                    for rlstep in range(MAX_PLAY_STEP):
+                        # print('embeddings | max {} | min {} | mean {}'.format(np.max(b_embs[agent_idx]), np.min(b_embs[agent_idx]), np.mean(b_embs[agent_idx])))
+                        # print('embeddings | max {} | min {} | mean {}'.format(np.max(cur_embeddings), np.min(cur_embeddings), np.mean(cur_embeddings)))
+                        # print('images | max {} | min {} | mean {}'.format(np.max(b_imgs[agent_idx]), np.min(b_imgs[agent_idx]), np.mean(b_imgs[agent_idx])))
+                        # cv2.imwrite(os.path.join('att_img', '{}_agent-{}_step-{}.jpg'.format(i, agent_idx, rlstep)), b_imgs[agent_idx].astype(np.uint8))
+                        # action = Agent.choose_action(b_embs[agent_idx])
+                        action = Agent.choose_action(cur_embeddings)
+                        # if np.random.random() < EPSILON:
+                        #     action = np.random.randint(0, ACTION_NUMS)
+                        if action == ACTION_NUMS - 1:
+                            break
+                        x1, y1 = np.array(np.unravel_index(action, (27, 27))) * PATCH_STRIDE
+                        # x2, y2 = np.maximum((223, 223), np.array([x1, y1], dtype=np.int) + 16)
+                        x2, y2 = np.minimum((223, 223), (x1 + PATCH_W, y1 + PATCH_H))
+                        # b_imgs[agent_idx][x1:x2, y1:y2] = 1e-5
+                        cur_img[x1:x2, y1:y2] = 1e-5
+
+                        print('images | max {} | min {} | mean {} | shape {}'.format(
+                                                np.max(cur_img), np.min(cur_img), 
+                                                np.mean(cur_img), np.array(cur_img).shape))
+ 
+                        sess.run(rl_iter.initializer, feed_dict={
+                                                image_holder:np.expand_dims(cur_img, 0),
+                                                # image_holder:np.expand_dims(b_imgs[agent_idx], 0),
+                                                fid_holder:np.expand_dims(b_fids[agent_idx], 0),
+                                                pid_holder:np.expand_dims(b_pids[agent_idx], 0)})
                     
-                        x1, y1 = np.array(np.unravel_index(action[a_idx], (27, 27))) * PATCH_STRIDE
-                        x2, y2 = np.maximum((223, 223), np.array([x1, y1]) + 16)
-                        b_imgs[a_idx][x1:x2, y1:y2, :] = 0
-                    
-                    rl_iter = tf.data.Dataset.from_tensor_slices((b_imgs, b_fids, b_pids)).repeat().batch(args.batch_p * args.batch_k).make_one_shot_iterator()
-                    rl_handle = sess.run(rl_iter.string_handle())
-                    
-                    b_imgs, b_embs = sess.run([images, endpoints['emb']], feed_dict={handle:rl_handle})
-                    cur_loss = dist(b_embs, triplet_storage.get_neg_embs()) - dist(b_embs, triplet_storage.get_pos_embs())
-                    reward = cur_loss - triplet_storage.get_loss()
-                    for a_idx in range(len(action)):
-                        if reward[a_idx] < 1e-8:
-                            finish_flag[a_idx] = 1
-                    triplet_storage.update_loss(cur_loss)
-                    Agent.store_transition(b_embs, action, reward)
+                        # b_imgs[agent_idx], b_embs[agent_idx] = sess.run([images, endpoints['emb']], 
+                        # b_imgs[agent_idx], cur_embeddings = sess.run([images, endpoints['emb']], 
+                        # cur_img, cur_embeddings = sess.run([images, endpoints['emb']], 
+                        cur_embeddings = sess.run(endpoints['emb'], feed_dict={handle:rl_handle})
+                        cur_embeddings = cur_embeddings[0]
+                        # cur_img, cur_embeddings = cur_img[0], cur_embeddings[0]
+                        prev_loss = triplet_storage.get_loss(agent_idx)
+                        # cur_loss = dist(b_embs[agent_idx], triplet_storage.get_neg_embs(agent_idx)) - dist(b_embs[agent_idx], triplet_storage.get_pos_embs(agent_idx))
+                        cur_loss = dist(cur_embeddings, triplet_storage.get_neg_embs(agent_idx)) \
+                                - dist(cur_embeddings, triplet_storage.get_pos_embs(agent_idx))
+                        reward = cur_loss - prev_loss
+                        triplet_storage.update_loss(cur_loss, agent_idx)
+                        # Agent.store_transition(b_embs[agent_idx], action, reward)
+                        Agent.store_transition(cur_embeddings, action, reward)
+                        triplet_storage.update_anchor_embs(cur_embeddings, agent_idx)
+                        log.info('RL | Agent {} | Step {} | Action {} | Reward {}'.format(agent_idx, rlstep, action, reward))
+                        # if abs(reward) < 1e-6:
+                        #     break
+                    _dis_reward, _rl_loss = Agent.learn()
+                    # log.info('RL | Discounted Reward {} | Loss {}'.format(_dis_reward, _rl_loss))
+                triplet_storage.clear_storage()
 
-                    print('Reinforcement Learning | Step {} | reward {}'.format(rlstep, np.mean(reward)))
-
-                    if np.sum(finish_flag) == args.batch_p * args.batch_k:
-                        break
-
-                Agent.learn()
-
-                supervise_iter = tf.data.Dataset.from_tensor_slices((b_imgs, b_fids, b_pids)).repeat().batch(args.batch_p * args.batch_k).make_one_shot_iterator()
+                # Supervised Learning
+                supervise_iter = tf.data.Dataset.from_tensor_slices((b_imgs, b_fids, b_pids)).batch(args.batch_p * args.batch_k).prefetch(args.batch_p * args.batch_k).make_one_shot_iterator()
                 supervise_handle = sess.run(supervise_iter.string_handle())
-
-                # Compute gradients, update weights, store logs!
-                # start_time = time.time()
                 _, summary, step, b_prec_at_k, b_embs, b_loss, b_fids, \
                 _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
                     sess.run([train_op, merged_summary, global_step, \

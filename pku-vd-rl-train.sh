@@ -4,18 +4,32 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=0
+export CUDA_VISIBLE_DEVICES=4
 
 METRIC='euclidean'
-HEADS='fc1024_recurrent_attention_wstop'
-BACKBONE='resnet_v2_50'
-EXPR_NAME='_0'
+# HEADS='fc1024_inception_mixed_attention'
+HEADS='fc1024'
+BACKBONE='inception'
+LEARNING_RATE=1e-5
+PROCESSOR='train_rl.py'
+EXPR_NAME='_finetune_rl_0'
+INIT_CHECKPT=./experiments/pku-vd/ckpt_inception_v4/checkpoint-285886 ; shift
 
-IMAGE_ROOT=/data2/wangq/VD1/ ; shift
-INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
+IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 
-python train.py \
+# if [ ${BACKBONE} == 'resnet_v2_50' ]; then
+#     INIT_CHECKPT=./experiments/pku-vd/pku-vd_resnet50_v2_results/checkpoint-360000 ; shift
+#     echo 'Finetune using resnet_v2_50 bachbone'
+# elif [ ${BACKBONE} == 'inception' ]; then
+#     INIT_CHECKPT=./experiments/pku-vd/ckpt_inception_v4/checkpoint-285886 ; shift
+#     echo 'Finetune using inception_v4 backbone'
+# else
+#     echo 'Wrong Backbone Networks name'
+#     exit 9
+# fi
+
+python ${PROCESSOR} \
     --train_set data/pku-vd/VD1_train.csv \
     --model_name ${BACKBONE} \
     --image_root $IMAGE_ROOT \
@@ -33,7 +47,7 @@ python train.py \
     --metric ${METRIC} \
     --loss batch_hard \
     --head_name ${HEADS} \
-    --learning_rate 1e-4 \
+    --learning_rate ${LEARNING_RATE} \
     --train_iterations 400000 \
     --decay_start_iteration 0 \
     --lr_decay_factor 0.96 \
