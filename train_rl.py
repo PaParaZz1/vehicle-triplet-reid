@@ -464,7 +464,7 @@ def main():
                 pos_embs = sess.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs * action})
                 neg_embs = sess.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs * action})
                 # print('embs shape | cur {} | pos {} | neg {}'.format(cur_embs.shape, pos_embs.shape, neg_embs.shape))
-                cur_loss = dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)
+                cur_loss = np.log(1 + np.exp(dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)))
                 # print('loss | cur {} | pos {}'.format(cur_loss.shape, b_loss.shape))
                 reward = cur_loss - b_loss
                 # print('obs {} | acs {} | rwd {}'.format(np.array(b_ftrs).shape, np.array(action).shape, np.array(reward).shape))
