@@ -36,7 +36,8 @@ class PolicyGradient:
         self.lr = learning_rate
         self.gamma = reward_decay
 
-        self.ep_obs, self.ep_as, self.ep_rs = [], [], []
+        # self.ep_obs, self.ep_as, self.ep_rs = [], [], []
+        self.ep_obs, self.ep_as, self.ep_rs = None, None, None
 
         self._build_net()
 
@@ -70,55 +71,59 @@ class PolicyGradient:
         '''
 
         with tf.name_scope('inputs'):
-            self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="observations")
-            self.tf_acts = tf.placeholder(tf.int32, [None, ], name="actions_num")
-            self.tf_vt = tf.placeholder(tf.float32, [None, ], name="actions_value")
-        
-            dense1 = slim.fully_connected(self.tf_obs, 256, scope='dense1')
-            dense2 = slim.fully_connected(dense1, self.n_actions, scope='dense2')
+            self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="rl_observations")
+            self.tf_acts = tf.placeholder(tf.float32, [None, self.n_features], name="rl_actions_num")
+            self.tf_vt = tf.placeholder(tf.float32, [None, ], name="rl_actions_value")
 
-            self.all_act_prob = tf.nn.softmax(dense2, name='act_prob')  # use softmax to convert to probability
+            # reduce1 = tf.reduce_mean(self.tf_obs, [1, 2], name='rl_reduce1', keep_dims=False)
+        
+            dense1 = slim.fully_connected(self.tf_obs, 256, scope='rl_dense1')
+            dense2 = slim.fully_connected(dense1, self.n_actions, scope='rl_dense2')
+
+            self.all_act_prob = tf.nn.softmax(dense2, name='rl_act_prob')  # use softmax to convert to probability
 
         with tf.name_scope('loss'):
             # to maximize total reward (log_p * R) is to minimize -(log_p * R), and the tf only have minimize(loss)
             # neg_log_prob = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=dense2, labels=self.tf_acts)   # this is negative log of chosen action
             # or in this way:
-            neg_log_prob = tf.reduce_sum(-tf.log(self.all_act_prob * tf.one_hot(self.tf_acts, self.n_actions) \
-                    + (1 - self.all_act_prob) * (1 - tf.one_hot(self.tf_acts, self.n_actions))), axis=1)
+            neg_log_prob = tf.reduce_sum(-tf.log(self.all_act_prob * self.tf_acts \
+                    + (1 - self.all_act_prob) * (1 - self.tf_acts)), axis=1)
             self.loss = tf.reduce_mean(neg_log_prob * self.tf_vt)  # reward guided loss
 
         with tf.name_scope('train'):
-            self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss)
+            self.global_step = tf.Variable(0, name='global_step', trainable=False)
+            self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=self.global_step)
 
     def choose_action(self, observation):
         # prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: np.expand_dims(observation, 0)})
-        prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: np.expand_dims(observation, 0)})
+        prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: observation})
         # action = np.random.choice(range(prob_weights.shape[1]), p=prob_weights.ravel())  # select action w.r.t the actions prob
         # action = [np.random.choice(range(prob_weights.shape[1]), p=prob_weights[i]) for i in range(len(prob_weights))]
-        action = np.argmax(prob_weights)
+        action = np.round(prob_weights)
+        # action = np.argmax(prob_weights)
         return action
 
     def store_transition(self, s, a, r):
-        self.ep_obs.append(s)
-        self.ep_as.append(a)
-        self.ep_rs.append(r)
+        self.ep_obs = s
+        self.ep_as = a
+        self.ep_rs = r
 
     def learn(self):
         if len(self.ep_as) == 0:
             return None, None
         # discount and normalize episode reward
         discounted_ep_rs_norm = self._discount_and_norm_rewards()
-        # print('observation {} | action {} | reward {}'.format(np.array(self.ep_obs).shape, self.ep_as, self.ep_rs))
 
         # train on episode
-        _ , _loss = self.sess.run([self.train_op, self.loss], feed_dict={
+        _ , _loss, _step = self.sess.run([self.train_op, self.loss, self.global_step], feed_dict={
              self.tf_obs: np.vstack(self.ep_obs),  # shape=[None, n_obs]
              self.tf_acts: np.array(self.ep_as),  # shape=[None, ]
              self.tf_vt: discounted_ep_rs_norm,  # shape=[None, ]
         })
 
-        self.ep_obs, self.ep_as, self.ep_rs = [], [], []    # empty episode data
-        return discounted_ep_rs_norm, _loss
+        self.ep_obs, self.ep_as, self.ep_rs = None, None, None    # empty episode data
+        # self.ep_obs, self.ep_as, self.ep_rs = [], [], []    # empty episode data
+        return discounted_ep_rs_norm, _loss, _step
 
     def _discount_and_norm_rewards(self):
         # discount episode rewards

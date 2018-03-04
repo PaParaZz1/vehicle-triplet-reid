@@ -29,13 +29,7 @@ config.gpu_options.allow_growth = True
 parser = ArgumentParser(description='Train a ReID network.')
 
 # set params for reinforcement learning
-MAX_PLAY_STEP = 25
-PATCH_W, PATCH_H = 16, 16
-# PATCH_W, PATCH_H = 32, 32
-PATCH_STRIDE = 8 
-# total number of actions is [(224-8)/8]^2 + 1 = 730
-# in spite of termial action, each action indicates the index of top-left corner of patch
-ACTION_NUMS = 730
+ACTION_NUMS = 1536
 EPSILON = 0.1
 
 
@@ -189,7 +183,7 @@ def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
     return selected_fids, tf.fill([batch_k], pid)
 
 
-def dist(a, b): return np.sqrt(np.sum(np.square(a-b)) + 1e-12)
+def dist(a, b): return np.sqrt(np.sum(np.square(a-b), axis=1) + 1e-12)
 
 
 def main():
@@ -337,6 +331,7 @@ def main():
     endpoints, body_prefix = model.endpoints(images, is_training=True)
     with tf.name_scope('head'):
         endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
+        
 
     # Create the loss in two steps:
     # 1. Compute all pairwise distances according to the specified metric.
@@ -383,7 +378,7 @@ def main():
 
     # Define the optimizer and the learning-rate schedule.
     # Unfortunately, we get NaNs if we don't handle no-decay separately.
-    global_step = tf.Variable(0, name='global_step', trainable=False)
+    global_step = tf.Variable(0, name='global_step_1', trainable=False)
     if 0 <= args.decay_start_iteration < args.train_iterations:
         learning_rate = tf.train.exponential_decay(
             args.learning_rate,
@@ -392,14 +387,14 @@ def main():
             args.lr_decay_steps, args.lr_decay_factor, staircase=True)
     else:
         learning_rate = args.learning_rate
-    tf.summary.scalar('learning_rate', learning_rate)
-    optimizer = tf.train.AdamOptimizer(learning_rate)
+    # tf.summary.scalar('learning_rate', learning_rate)
+    # optimizer = tf.train.AdamOptimizer(learning_rate)
     # Feel free to try others!
     # optimizer = tf.train.AdadeltaOptimizer(learning_rate)
 
     # Update_ops are used to update batchnorm stats.
-    with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-        train_op = optimizer.minimize(loss_mean, global_step=global_step)
+    # with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
+    #     train_op = optimizer.minimize(loss_mean, global_step=global_step)
 
     # Define a saver for the complete model.
     checkpoint_saver = tf.train.Saver(max_to_keep=0)
@@ -408,7 +403,7 @@ def main():
         # create agent
         Agent = PolicyGradient(
                 n_actions=ACTION_NUMS,
-                n_features=args.embedding_dim,
+                n_features=1536,
                 sess=sess,
                 learning_rate=0.01,
                 reward_decay=0.995,
@@ -452,67 +447,33 @@ def main():
             for i in range(start_step, args.train_iterations):
                 # Just forward to get triplets and images, no updates
                 start_time = time.time()
-                b_imgs, b_embs, b_loss, b_fids, b_pids, \
+                b_ftrs, b_embs, b_loss, b_fids, b_pids, \
                 _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
-                    sess.run([images, endpoints['emb'], losses, fids, pids, \
+                    sess.run([endpoints['model_output'], endpoints['emb'], losses, fids, pids, \
                     pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
-                triplet_storage.add_storage(copy.deepcopy(b_embs), copy.deepcopy(b_embs[_pos_indices]), copy.deepcopy(b_embs[_neg_indices]), copy.deepcopy(b_loss))
-                print('anchor {} | pos {}'.format(b_embs.shape, b_embs[_pos_indices].shape))
+                pos_ftrs, neg_ftrs = copy.deepcopy(b_ftrs[_pos_indices]), copy.deepcopy(b_ftrs[_neg_indices])
 
                 # start to do reinforcement learning
-                sorted_agent = np.random.choice(range(args.batch_p * args.batch_k), 5)
-                for agent_idx in sorted_agent:
-                    cur_embeddings = triplet_storage.get_anchor_embs(agent_idx)
-                    cur_img = b_imgs[agent_idx]
-                    for rlstep in range(MAX_PLAY_STEP):
-                        # print('embeddings | max {} | min {} | mean {}'.format(np.max(b_embs[agent_idx]), np.min(b_embs[agent_idx]), np.mean(b_embs[agent_idx])))
-                        # print('embeddings | max {} | min {} | mean {}'.format(np.max(cur_embeddings), np.min(cur_embeddings), np.mean(cur_embeddings)))
-                        # print('images | max {} | min {} | mean {}'.format(np.max(b_imgs[agent_idx]), np.min(b_imgs[agent_idx]), np.mean(b_imgs[agent_idx])))
-                        # cv2.imwrite(os.path.join('att_img', '{}_agent-{}_step-{}.jpg'.format(i, agent_idx, rlstep)), b_imgs[agent_idx].astype(np.uint8))
-                        # action = Agent.choose_action(b_embs[agent_idx])
-                        action = Agent.choose_action(cur_embeddings)
-                        # if np.random.random() < EPSILON:
-                        #     action = np.random.randint(0, ACTION_NUMS)
-                        if action == ACTION_NUMS - 1:
-                            break
-                        x1, y1 = np.array(np.unravel_index(action, (27, 27))) * PATCH_STRIDE
-                        # x2, y2 = np.maximum((223, 223), np.array([x1, y1], dtype=np.int) + 16)
-                        x2, y2 = np.minimum((223, 223), (x1 + PATCH_W, y1 + PATCH_H))
-                        # b_imgs[agent_idx][x1:x2, y1:y2] = 1e-5
-                        cur_img[x1:x2, y1:y2] = 1e-5
+                # print('feature shape: {}'.format(b_ftrs.shape))
+                action = Agent.choose_action(b_ftrs)
+                # print('action shape {}'.format(action.shape))
+                for a_idx in range(len(action)):
+                    action[a_idx] = np.where(np.random.random((ACTION_NUMS,)) < EPSILON, np.random.randint(0, 2, (ACTION_NUMS,)), action[a_idx])
 
-                        print('images | max {} | min {} | mean {} | shape {}'.format(
-                                                np.max(cur_img), np.min(cur_img), 
-                                                np.mean(cur_img), np.array(cur_img).shape))
- 
-                        sess.run(rl_iter.initializer, feed_dict={
-                                                image_holder:np.expand_dims(cur_img, 0),
-                                                # image_holder:np.expand_dims(b_imgs[agent_idx], 0),
-                                                fid_holder:np.expand_dims(b_fids[agent_idx], 0),
-                                                pid_holder:np.expand_dims(b_pids[agent_idx], 0)})
-                    
-                        # b_imgs[agent_idx], b_embs[agent_idx] = sess.run([images, endpoints['emb']], 
-                        # b_imgs[agent_idx], cur_embeddings = sess.run([images, endpoints['emb']], 
-                        # cur_img, cur_embeddings = sess.run([images, endpoints['emb']], 
-                        cur_embeddings = sess.run(endpoints['emb'], feed_dict={handle:rl_handle})
-                        cur_embeddings = cur_embeddings[0]
-                        # cur_img, cur_embeddings = cur_img[0], cur_embeddings[0]
-                        prev_loss = triplet_storage.get_loss(agent_idx)
-                        # cur_loss = dist(b_embs[agent_idx], triplet_storage.get_neg_embs(agent_idx)) - dist(b_embs[agent_idx], triplet_storage.get_pos_embs(agent_idx))
-                        cur_loss = dist(cur_embeddings, triplet_storage.get_neg_embs(agent_idx)) \
-                                - dist(cur_embeddings, triplet_storage.get_pos_embs(agent_idx))
-                        reward = cur_loss - prev_loss
-                        triplet_storage.update_loss(cur_loss, agent_idx)
-                        # Agent.store_transition(b_embs[agent_idx], action, reward)
-                        Agent.store_transition(cur_embeddings, action, reward)
-                        triplet_storage.update_anchor_embs(cur_embeddings, agent_idx)
-                        log.info('RL | Agent {} | Step {} | Action {} | Reward {}'.format(agent_idx, rlstep, action, reward))
-                        # if abs(reward) < 1e-6:
-                        #     break
-                    _dis_reward, _rl_loss = Agent.learn()
-                    # log.info('RL | Discounted Reward {} | Loss {}'.format(_dis_reward, _rl_loss))
-                triplet_storage.clear_storage()
+                cur_embs = sess.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * action})
+                pos_embs = sess.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs * action})
+                neg_embs = sess.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs * action})
+                # print('embs shape | cur {} | pos {} | neg {}'.format(cur_embs.shape, pos_embs.shape, neg_embs.shape))
+                cur_loss = dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)
+                # print('loss | cur {} | pos {}'.format(cur_loss.shape, b_loss.shape))
+                reward = cur_loss - b_loss
+                # print('obs {} | acs {} | rwd {}'.format(np.array(b_ftrs).shape, np.array(action).shape, np.array(reward).shape))
+                Agent.store_transition(b_ftrs, action, reward)
+                _dis_reward, _rl_loss, step = Agent.learn()
+                elapsed_time = time.time() - start_time
+                log.info('RL | Step {} | Reward {: .5e} | Discounted Reward {: .5e} | Loss {: .5e} | Speed {:.2f}s/iter'.format(step, np.mean(reward), np.mean(_dis_reward), np.mean(_rl_loss), elapsed_time))
 
+                '''
                 # Supervised Learning
                 supervise_iter = tf.data.Dataset.from_tensor_slices((b_imgs, b_fids, b_pids)).batch(args.batch_p * args.batch_k).prefetch(args.batch_p * args.batch_k).make_one_shot_iterator()
                 supervise_handle = sess.run(supervise_iter.string_handle())
@@ -546,6 +507,7 @@ def main():
                              elapsed_time))
                 sys.stdout.flush()
                 sys.stderr.flush()
+                '''
 
                 # Save a checkpoint of training every so often.
                 if (args.checkpoint_frequency > 0 and
