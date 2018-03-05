@@ -22,15 +22,13 @@ import loss
 from nets import NET_CHOICES
 from heads import HEAD_CHOICES
 from RL_utils import TripletStorage, PolicyGradient
+from utils import show_stats
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 
 parser = ArgumentParser(description='Train a ReID network.')
 
-# set params for reinforcement learning
-ACTION_NUMS = 1536
-EPSILON = 0.1
 
 
 # Required.
@@ -300,49 +298,63 @@ def main():
     # Overlap producing and consuming for parallelism.
     dataset = dataset.prefetch(1)
 
-    # Since we repeat the data infinitely, we only need a one-shot iterator.
-    train_iter = dataset.make_one_shot_iterator()
-    # images, fids, pids = train_iter.get_next()
-
     # output_types: (tf.float32, tf.string, tf.string)
     # output_shapes: ((None, 224, 224, 3), (None), (None))
 
+    '''
     # use handle so that we can feed data from difference sources into the model
     handle = tf.placeholder(tf.string, shape=[])
     iterator = tf.data.Iterator.from_string_handle(
                 handle, dataset.output_types, dataset.output_shapes)
-    images, fids, pids = iterator.get_next()
-
-    image_holder = tf.placeholder(tf.float32, shape=[None, 224, 224, 3])
-    fid_holder = tf.placeholder(tf.string, shape=[None])
-    pid_holder = tf.placeholder(tf.string, shape=[None])
-    # rl_dataset = tf.data.Dataset.from_tensor_slices((image_holder, fid_holder, pid_holder)).batch(1).prefetch(1)
-    # rl_dataset = tf.data.Dataset.from_tensor_slices((image_holder, fid_holder, pid_holder))
-    rl_dataset = tf.data.Dataset.from_tensors((image_holder, fid_holder, pid_holder))
-    rl_iter = rl_dataset.make_initializable_iterator()
+    '''
 
     # Create the model and an embedding head.
     model = import_module('nets.' + args.model_name)
     head = import_module('heads.' + args.head_name)
+    sup_graph = tf.Graph()
+    with sup_graph.as_default():
+        # Since we repeat the data infinitely, we only need a one-shot iterator.
+        train_iter = dataset.make_one_shot_iterator()
 
-    # Feed the image through the model. The returned `body_prefix` will be used
-    # further down to load the pre-trained weights for all variables with this
-    # prefix.
-    endpoints, body_prefix = model.endpoints(images, is_training=True)
-    with tf.name_scope('head'):
-        endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
+        image_holder = tf.placeholder(tf.float32, shape=[None, 224, 224, 3])
+        fid_holder = tf.placeholder(tf.string, shape=[None])
+        pid_holder = tf.placeholder(tf.string, shape=[None])
+        rl_dataset = tf.data.Dataset.from_tensors((image_holder, fid_holder, pid_holder))
+        rl_iter = rl_dataset.make_initializable_iterator()
+
+        # use handle so that we can feed data from difference sources into the model
+        handle = tf.placeholder(tf.string, shape=[])
+        iterator = tf.data.Iterator.from_string_handle(
+                    handle, dataset.output_types, dataset.output_shapes)
+        images, fids, pids = iterator.get_next()
         
+        # Feed the image through the model. The returned `body_prefix` will be used
+        # further down to load the pre-trained weights for all variables with this
+        # prefix.
+        endpoints, body_prefix = model.endpoints(images, is_training=True)
+        with tf.name_scope('head'):
+            endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
+        
+        # Create the loss in two steps:
+        # 1. Compute all pairwise distances according to the specified metric.
+        # 2. For each anchor along the first dimension, compute its loss.
+        dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
+        losses, train_top1, prec_at_k, _, neg_dists, pos_dists, pos_indices, neg_indices = loss.LOSS_CHOICES[args.loss](
+            dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
+        
+        # Count the number of active entries, and compute the total batch loss.
+        num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
+        loss_mean = tf.reduce_mean(losses)
 
-    # Create the loss in two steps:
-    # 1. Compute all pairwise distances according to the specified metric.
-    # 2. For each anchor along the first dimension, compute its loss.
-    dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
-    losses, train_top1, prec_at_k, _, neg_dists, pos_dists, pos_indices, neg_indices = loss.LOSS_CHOICES[args.loss](
-        dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
-
-    # Count the number of active entries, and compute the total batch loss.
-    num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
-    loss_mean = tf.reduce_mean(losses)
+        # These are collected here before we add the optimizer, because depending
+        # on the optimizer, it might add extra slots, which are also global
+        # variables, with the exact same prefix.
+        model_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, body_prefix)
+        
+        # Define a saver for the complete model.
+        sup_saver = tf.train.Saver(max_to_keep=0)
+        sup_init = tf.global_variables_initializer()
+        
 
     # Some logging for tensorboard.
     tf.summary.histogram('loss_distribution', losses)
@@ -370,72 +382,56 @@ def main():
             os.path.join(args.experiment_root, 'fids'),
             dtype='S' + str(max_fid_len), shape=(args.train_iterations, batch_size))
 
-    # These are collected here before we add the optimizer, because depending
-    # on the optimizer, it might add extra slots, which are also global
-    # variables, with the exact same prefix.
-    model_variables = tf.get_collection(
-        tf.GraphKeys.GLOBAL_VARIABLES, body_prefix)
+    # set params for reinforcement learning
+    ACTION_NUMS = 1536
+    EPSILON = 0.45
+    # create agent
+    Agent = PolicyGradient(
+            n_actions=ACTION_NUMS,
+            n_features=1536,
+            learning_rate=1e-3,
+            reward_decay=0.995,
+            is_train=True,
+            )
+    rl_graph, rl_init, rl_saver = Agent.train_handle()
 
-    # Define the optimizer and the learning-rate schedule.
-    # Unfortunately, we get NaNs if we don't handle no-decay separately.
-    global_step = tf.Variable(0, name='global_step_1', trainable=False)
-    if 0 <= args.decay_start_iteration < args.train_iterations:
-        learning_rate = tf.train.exponential_decay(
-            args.learning_rate,
-            tf.maximum(0, global_step - args.decay_start_iteration),
-            # args.train_iterations - args.decay_start_iteration, args.weight_decay_factor)
-            args.lr_decay_steps, args.lr_decay_factor, staircase=True)
-    else:
-        learning_rate = args.learning_rate
-    # tf.summary.scalar('learning_rate', learning_rate)
-    # optimizer = tf.train.AdamOptimizer(learning_rate)
-    # Feel free to try others!
-    # optimizer = tf.train.AdadeltaOptimizer(learning_rate)
-
-    # Update_ops are used to update batchnorm stats.
-    # with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-    #     train_op = optimizer.minimize(loss_mean, global_step=global_step)
-
-    # Define a saver for the complete model.
-    checkpoint_saver = tf.train.Saver(max_to_keep=0)
-
-    with tf.Session(config=config) as sess:
-        # create agent
-        Agent = PolicyGradient(
-                n_actions=ACTION_NUMS,
-                n_features=1536,
-                sess=sess,
-                learning_rate=0.01,
-                reward_decay=0.995,
-                )
-
+    with tf.Session(config=config, graph=sup_graph) as sess_sup, tf.Session(config=config, graph=rl_graph) as sess_rl:
+        Agent.get_sess(sess_rl)
         if args.resume:
             # In case we're resuming, simply load the full checkpoint to init.
-            last_checkpoint = tf.train.latest_checkpoint(args.experiment_root)
-            log.info('Restoring from checkpoint: {}'.format(last_checkpoint))
-            checkpoint_saver.restore(sess, last_checkpoint)
+            # load params for rl model
+            last_checkpoint = tf.train.latest_checkpoint(args.experiment_root, latest_filename='checkpoint-rl')
+            log.info('Restoring RL Model from checkpoint: {}'.format(last_checkpoint))
+            rl_saver.restore(sess_rl, last_checkpoint)
+
+            # load params for supervised model
+            last_checkpoint = tf.train.latest_checkpoint(args.experiment_root, latest_filename='checkpoint-sup')
+            log.info('Restoring Supervised Model from checkpoint: {}'.format(last_checkpoint))
+            sup_saver.restore(sess_sup, last_checkpoint)
         else:
             # But if we're starting from scratch, we may need to load some
             # variables from the pre-trained weights, and random init others.
-            sess.run(tf.global_variables_initializer())
+            sess_sup.run(sup_init)
+            sess_rl.run(rl_init)
             if args.initial_checkpoint is not None:
                 saver = tf.train.Saver(model_variables)
-                saver.restore(sess, args.initial_checkpoint)
+                saver.restore(sess_sup, args.initial_checkpoint)
 
             # In any case, we also store this initialization as a checkpoint,
             # such that we could run exactly reproduceable experiments.
-            checkpoint_saver.save(sess, os.path.join(
-                args.experiment_root, 'checkpoint'), global_step=0)
+            sup_saver.save(sess_sup, os.path.join(args.experiment_root, 'checkpoint-sup'), latest_filename='checkpoint-sup', global_step=0)
+            rl_saver.save(sess_rl, os.path.join(args.experiment_root, 'checkpoint-rl'), latest_filename='checkpoint-rl', global_step=0)
 
         merged_summary = tf.summary.merge_all()
-        summary_writer = tf.summary.FileWriter(args.experiment_root, sess.graph)
+        summary_writer = tf.summary.FileWriter(args.experiment_root, sess_sup.graph)
+        summary_writer = tf.summary.FileWriter(args.experiment_root, sess_rl.graph)
 
-        start_step = sess.run(global_step)
+        start_step = sess_rl.run(Agent.global_step)
         log.info('Starting training from iteration {}.'.format(start_step))
 
         # initialize train data handle
-        train_handle = sess.run(train_iter.string_handle())
-        rl_handle = sess.run(rl_iter.string_handle())
+        train_handle = sess_sup.run(train_iter.string_handle())
+        rl_handle = sess_sup.run(rl_iter.string_handle())
 
         # initialize storage for triplet embeddings and previous triplet loss
         triplet_storage = TripletStorage()
@@ -449,39 +445,38 @@ def main():
                 start_time = time.time()
                 b_ftrs, b_embs, b_loss, b_fids, b_pids, \
                 _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
-                    sess.run([endpoints['model_output'], endpoints['emb'], losses, fids, pids, \
+                    sess_sup.run([endpoints['model_output'], endpoints['emb'], losses, fids, pids, \
                     pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
                 pos_ftrs, neg_ftrs = copy.deepcopy(b_ftrs[_pos_indices]), copy.deepcopy(b_ftrs[_neg_indices])
 
                 # start to do reinforcement learning
-                # print('feature shape: {}'.format(b_ftrs.shape))
                 action = Agent.choose_action(b_ftrs)
-                # print('action shape {}'.format(action.shape))
+                org_action_stats = [np.mean(np.count_nonzero(action, 1)), np.mean(1536 - np.count_nonzero(action, 1))]
+                if i % 10000 == 0 and EPSILON >= 0.1:
+                    EPSILON -= 0.15
                 for a_idx in range(len(action)):
                     action[a_idx] = np.where(np.random.random((ACTION_NUMS,)) < EPSILON, np.random.randint(0, 2, (ACTION_NUMS,)), action[a_idx])
+                action_stats = [np.mean(np.count_nonzero(action, 1)), np.mean(1536 - np.count_nonzero(action, 1))]
 
-                cur_embs = sess.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * action})
-                pos_embs = sess.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs * action})
-                neg_embs = sess.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs * action})
-                # print('embs shape | cur {} | pos {} | neg {}'.format(cur_embs.shape, pos_embs.shape, neg_embs.shape))
+                cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * action})
+                pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs * action})
+                neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs * action})
                 cur_loss = np.log(1 + np.exp(dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)))
-                # print('loss | cur {} | pos {}'.format(cur_loss.shape, b_loss.shape))
                 reward = cur_loss - b_loss
-                # print('obs {} | acs {} | rwd {}'.format(np.array(b_ftrs).shape, np.array(action).shape, np.array(reward).shape))
                 Agent.store_transition(b_ftrs, action, reward)
                 _dis_reward, _rl_loss, step = Agent.learn()
                 elapsed_time = time.time() - start_time
-                log.info('RL | Step {} | Reward {: .5e} | Discounted Reward {: .5e} | Loss {: .5e} | Speed {:.2f}s/iter'.format(step, np.mean(reward), np.mean(_dis_reward), np.mean(_rl_loss), elapsed_time))
+                log.info('RL | Step {} | EPSILON {:.2f} | Org Action {:.2f} | Action {:.2f} | Reward {: .4e} | Discounted Reward {: .4e} | Loss {: .4e} | Speed {:.2f}s/iter'.format(step, EPSILON, org_action_stats[0], action_stats[0], np.mean(reward), np.mean(_dis_reward), np.mean(_rl_loss), elapsed_time))
 
                 '''
                 # Supervised Learning
-                supervise_iter = tf.data.Dataset.from_tensor_slices((b_imgs, b_fids, b_pids)).batch(args.batch_p * args.batch_k).prefetch(args.batch_p * args.batch_k).make_one_shot_iterator()
-                supervise_handle = sess.run(supervise_iter.string_handle())
+                sup_iter = tf.data.Dataset.from_tensor_slices((b_imgs, b_fids, b_pids)).batch(args.batch_p * args.batch_k).prefetch(args.batch_p * args.batch_k).make_one_shot_iterator()
+                sup_handle = sess.run(sup_iter.string_handle())
                 _, summary, step, b_prec_at_k, b_embs, b_loss, b_fids, \
                 _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
                     sess.run([train_op, merged_summary, global_step, \
                     prec_at_k, endpoints['emb'], losses, fids, \
-                    pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:supervise_handle})
+                    pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:sup_handle})
                 elapsed_time = time.time() - start_time
 
                 # Compute the iteration speed and add it to the summary.
@@ -510,10 +505,9 @@ def main():
                 '''
 
                 # Save a checkpoint of training every so often.
-                if (args.checkpoint_frequency > 0 and
-                        step % args.checkpoint_frequency == 0):
-                    checkpoint_saver.save(sess, os.path.join(
-                        args.experiment_root, 'checkpoint'), global_step=step)
+                if (args.checkpoint_frequency > 0 and step % args.checkpoint_frequency == 0):
+                    sup_saver.save(sess_sup, os.path.join(args.experiment_root, 'checkpoint-sup'), latest_filename='checkpoint-sup', global_step=step)
+                    rl_saver.save(sess_rl, os.path.join(args.experiment_root, 'checkpoint-rl'), latest_filename='checkpoint-rl', global_step=step)
 
                 # Stop the main-loop at the end of the step, if requested.
                 if u.interrupted:
@@ -523,8 +517,8 @@ def main():
         # Store one final checkpoint. This might be redundant, but it is crucial
         # in case intermediate storing was disabled and it saves a checkpoint
         # when the process was interrupted.
-        checkpoint_saver.save(sess, os.path.join(
-            args.experiment_root, 'checkpoint'), global_step=step)
+        sup_saver.save(sess_sup, os.path.join(args.experiment_root, 'checkpoint-sup'), latest_filename='checkpoint-sup', global_step=step)
+        rl_saver.save(sess_rl, os.path.join(args.experiment_root, 'checkpoint-rl'), latest_filename='checkpoint-rl', global_step=step)
 
 
 if __name__ == '__main__':

@@ -4,15 +4,14 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=3
 
 METRIC='euclidean'
 HEADS='fc1024_inception_mixed_attention'
-# HEADS='fc1024'
 BACKBONE='inception'
 LEARNING_RATE=1e-5
 PROCESSOR='train_rl.py'
-EXPR_NAME='_finetune_rl_0'
+EXPR_NAME='_finetune_rl_test' # 0 for lr 1e-4; 1 for lr 1e-5
 INIT_CHECKPT=./experiments/pku-vd/ckpt_inception_mixed_attention/checkpoint-240000 ; shift
 
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
@@ -35,6 +34,7 @@ python ${PROCESSOR} \
     --margin soft \
     --metric ${METRIC} \
     --loss batch_hard \
+    --checkpoint_frequency 10 \
     --head_name ${HEADS} \
     --learning_rate ${LEARNING_RATE} \
     --train_iterations 400000 \

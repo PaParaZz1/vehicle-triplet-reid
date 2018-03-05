@@ -19,3 +19,4 @@ def endpoints(image, is_training):
         endpoints['Mixed_7d'], [1, 2], name='pool5', keep_dims=False)
 
     return endpoints, 'InceptionV4'
+
