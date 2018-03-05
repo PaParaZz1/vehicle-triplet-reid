@@ -4,14 +4,16 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=1
+
+source ../triplet-reid-rl-attention/venv/bin/activate
 
 METRIC='euclidean'
 HEADS='fc1024_inception_mixed_attention'
 BACKBONE='inception'
 LEARNING_RATE=1e-5
 PROCESSOR='train_rl.py'
-EXPR_NAME='_finetune_rl_test' # 0 for lr 1e-4; 1 for lr 1e-5
+EXPR_NAME='_finetune_rl_0'
 INIT_CHECKPT=./experiments/pku-vd/ckpt_inception_mixed_attention/checkpoint-240000 ; shift
 
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
@@ -42,5 +44,9 @@ python ${PROCESSOR} \
     --lr_decay_factor 0.96 \
     --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
+    --rl_learning_rate 1e-3 \
+    --rl_epsilon 1.15 \
+    --rl_epsilon_decay 0.1 \
+    --rl_activation norm_sigmoid \
     "$@"
     # --resume \

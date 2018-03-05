@@ -30,7 +30,8 @@ class PolicyGradient:
             learning_rate=0.01,
             reward_decay=0.95,
             output_graph=False,
-            is_train=True
+            is_train=True,
+            rl_activation='softmax',
             ):
 
         self.n_actions = n_actions
@@ -38,13 +39,12 @@ class PolicyGradient:
         self.lr = learning_rate
         self.gamma = reward_decay
         self.is_train = is_train
+        self.rl_activation = rl_activation
 
         self.ep_obs, self.ep_as, self.ep_rs = None, None, None
 
         self.g_rl = tf.Graph()
         self._build_net()
-
-        # self.sess = tf.Session(graph=self.g_rl)
 
     def train_handle(self):
         return self.g_rl, self.init_rl, self.saver_rl
@@ -77,9 +77,12 @@ class PolicyGradient:
                         dense1 = slim.fully_connected(self.tf_obs, 256, scope='rl_dense1')
                         dense2 = slim.fully_connected(dense1, self.n_actions, scope='rl_dense2')
 
-                        # self.all_act_prob = tf.nn.softmax(dense2, name='rl_act_prob')  # use softmax to convert to probability
-                        self.all_act_prob = tf.sigmoid(dense2, name='rl_act_prob')
-                        # self.all_act_prob = tf.tanh(dense2, name='rl_act_prob')
+                        if self.rl_activation == 'softmax':
+                            self.all_act_prob = tf.nn.softmax(dense2, name='rl_act_prob')  # use softmax to convert to probability
+                        elif self.rl_activation == 'norm_sigmoid':
+                            self.all_act_prob = tf.sigmoid(dense2, name='rl_act_prob')
+                        elif self.rl_activation == 'tanh':
+                            self.all_act_prob = tf.tanh(dense2, name='rl_act_prob')
 
             with tf.name_scope('loss'):
                 # to maximize total reward (log_p * R) is to minimize -(log_p * R), and the tf only have minimize(loss)
@@ -101,7 +104,8 @@ class PolicyGradient:
         prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: observation})
         # action = np.random.choice(range(prob_weights.shape[1]), p=prob_weights.ravel())  # select action w.r.t the actions prob
         # action = [np.random.choice(range(prob_weights.shape[1]), p=prob_weights[i]) for i in range(len(prob_weights))]
-        # prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x)) for x in prob_weights]
+        if self.rl_activation == 'norm_sigmoid':
+            prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x)) for x in prob_weights]
         if self.is_train:
             show_stats('prob', prob_weights)
         action = np.round(prob_weights)

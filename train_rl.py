@@ -161,6 +161,26 @@ parser.add_argument(
          ' embeddings, losses and FIDs seen in each batch during training.'
          ' Everything can be re-constructed and analyzed that way.')
 
+parser.add_argument(
+    '--rl_learning_rate', default=1e-3, type=common.positive_float,
+    help='learning rate for traininig reinforcement learning agent')
+
+parser.add_argument(
+    '--rl_epsilon', default=1.15, type=common.positive_float,
+    help='epsilon greedy for traininig reinforcement learning agent')
+
+parser.add_argument(
+    '--rl_reward_decay', default=0.995, type=common.positive_float,
+    help='discount param for traininig reinforcement learning agent')
+
+parser.add_argument(
+    '--rl_epsilon_decay', default=0.1, type=common.positive_float,
+    help='decay param for epsilon in epsilon-greedy for traininig reinforcement learning agent')
+
+parser.add_argument(
+    '--rl_activation', default='softmax', choices=['softmax', 'norm_sigmoid', 'tanh'],
+    help='choose activation function in reinforcement learning model')
+
 
 def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
     """ Given a PID, select K FIDs of that specific PID. """
@@ -384,14 +404,15 @@ def main():
 
     # set params for reinforcement learning
     ACTION_NUMS = 1536
-    EPSILON = 0.45
+    EPSILON = args.rl_epsilon
     # create agent
     Agent = PolicyGradient(
             n_actions=ACTION_NUMS,
             n_features=1536,
-            learning_rate=1e-3,
-            reward_decay=0.995,
+            learning_rate=args.rl_learning_rate,
+            reward_decay=args.rl_reward_decay,
             is_train=True,
+            rl_activation=args.rl_activation,
             )
     rl_graph, rl_init, rl_saver = Agent.train_handle()
 
@@ -453,7 +474,7 @@ def main():
                 action = Agent.choose_action(b_ftrs)
                 org_action_stats = [np.mean(np.count_nonzero(action, 1)), np.mean(1536 - np.count_nonzero(action, 1))]
                 if i % 10000 == 0 and EPSILON >= 0.1:
-                    EPSILON -= 0.15
+                    EPSILON -= args.rl_epsilon_decay
                 for a_idx in range(len(action)):
                     action[a_idx] = np.where(np.random.random((ACTION_NUMS,)) < EPSILON, np.random.randint(0, 2, (ACTION_NUMS,)), action[a_idx])
                 action_stats = [np.mean(np.count_nonzero(action, 1)), np.mean(1536 - np.count_nonzero(action, 1))]
