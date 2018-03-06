@@ -74,15 +74,19 @@ class PolicyGradient:
                         self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="rl_observations")
                         self.tf_acts = tf.placeholder(tf.float32, [None, self.n_features], name="rl_actions_num")
                         self.tf_vt = tf.placeholder(tf.float32, [None, ], name="rl_actions_value")
-                        dense1 = slim.fully_connected(self.tf_obs, 256, scope='rl_dense1')
+                        dense1 = slim.fully_connected(self.tf_obs, 1024, scope='rl_dense1')
                         dense2 = slim.fully_connected(dense1, self.n_actions, scope='rl_dense2')
 
                         if self.rl_activation == 'softmax':
                             self.all_act_prob = tf.nn.softmax(dense2, name='rl_act_prob')  # use softmax to convert to probability
                         elif self.rl_activation == 'norm_sigmoid':
                             self.all_act_prob = tf.sigmoid(dense2, name='rl_act_prob')
+                        elif self.rl_activation == 'sigmoid':
+                            self.all_act_prob = tf.sigmoid(dense2, name='rl_act_prob')
                         elif self.rl_activation == 'tanh':
                             self.all_act_prob = tf.tanh(dense2, name='rl_act_prob')
+                        elif self.rl_activation == 'linear':
+                            self.all_act_prob = dense2
 
             with tf.name_scope('loss'):
                 # to maximize total reward (log_p * R) is to minimize -(log_p * R), and the tf only have minimize(loss)
@@ -90,7 +94,8 @@ class PolicyGradient:
                 # or in this way:
                 # neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob) * self.tf_acts \
                 #         + tf.log(1 - self.all_act_prob) * (1 - self.tf_acts), axis=1)
-                neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob) * self.tf_acts, axis=1)
+                neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob * self.tf_acts + \
+                        (1 - self.all_act_prob) * (1 - self.tf_acts)), axis=1)
                 self.loss = tf.reduce_mean(neg_log_prob * self.tf_vt)  # reward guided loss
 
             with tf.name_scope('train'):
@@ -105,11 +110,17 @@ class PolicyGradient:
         # action = np.random.choice(range(prob_weights.shape[1]), p=prob_weights.ravel())  # select action w.r.t the actions prob
         # action = [np.random.choice(range(prob_weights.shape[1]), p=prob_weights[i]) for i in range(len(prob_weights))]
         if self.rl_activation == 'norm_sigmoid':
-            prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x)) for x in prob_weights]
-        if self.is_train:
-            show_stats('prob', prob_weights)
-        action = np.round(prob_weights)
-        # action = np.argmax(prob_weights)
+            prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
+        # if self.is_train:
+        #     show_stats('prob', prob_weights)
+        # if self.is_train:
+        #     action = np.round(prob_weights)
+        # else:
+        #     action = prob_weights
+        # print('shape of prob_weights: {}'.format(prob_weights.shape))
+        action = []
+        for batch in prob_weights:
+            action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
         return action
 
     def store_transition(self, s, a, r):
@@ -121,18 +132,18 @@ class PolicyGradient:
         if len(self.ep_as) == 0:
             return None, None
         # discount and normalize episode reward
-        discounted_ep_rs_norm = self._discount_and_norm_rewards()
+        # discounted_ep_rs_norm = self._discount_and_norm_rewards()
+        discounted_ep_rs_norm = self.ep_rs
 
         # train on episode
-        _ , _loss, _step = self.sess.run([self.train_op, self.loss, self.global_step], feed_dict={
+        _ , _loss = self.sess.run([self.train_op, self.loss], feed_dict={
              self.tf_obs: np.vstack(self.ep_obs),  # shape=[None, n_obs]
              self.tf_acts: np.array(self.ep_as),  # shape=[None, ]
              self.tf_vt: discounted_ep_rs_norm,  # shape=[None, ]
         })
 
         self.ep_obs, self.ep_as, self.ep_rs = None, None, None    # empty episode data
-        # self.ep_obs, self.ep_as, self.ep_rs = [], [], []    # empty episode data
-        return discounted_ep_rs_norm, _loss, _step
+        return _loss
 
     def _discount_and_norm_rewards(self):
         # discount episode rewards
@@ -146,8 +157,8 @@ class PolicyGradient:
         discounted_ep_rs = self.ep_rs
 
         # normalize episode rewards
-        discounted_ep_rs -= np.mean(discounted_ep_rs)
-        discounted_ep_rs /= np.std(discounted_ep_rs)
+        # discounted_ep_rs -= np.mean(discounted_ep_rs)
+        # discounted_ep_rs /= np.std(discounted_ep_rs)
         return discounted_ep_rs
 
 

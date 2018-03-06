@@ -178,8 +178,12 @@ parser.add_argument(
     help='decay param for epsilon in epsilon-greedy for traininig reinforcement learning agent')
 
 parser.add_argument(
-    '--rl_activation', default='softmax', choices=['softmax', 'norm_sigmoid', 'tanh'],
+    '--rl_activation', default='sigmoid', choices=['sigmoid', 'softmax', 'norm_sigmoid', 'tanh'],
     help='choose activation function in reinforcement learning model')
+
+parser.add_argument(
+    '--rl_sample_num', default=10, type=common.positive_int,
+    help='number of action samples')
 
 
 def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
@@ -461,7 +465,8 @@ def main():
         # utility such that an iteration still finishes on Ctrl+C and we can
         # stop the training cleanly.
         with lb.Uninterrupt(sigs=[SIGINT, SIGTERM], verbose=True) as u:
-            for i in range(start_step, args.train_iterations):
+            # for i in range(start_step, args.train_iterations):
+            for step in range(start_step, args.train_iterations):
                 # Just forward to get triplets and images, no updates
                 start_time = time.time()
                 b_ftrs, b_embs, b_loss, b_fids, b_pids, \
@@ -470,24 +475,31 @@ def main():
                     pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
                 pos_ftrs, neg_ftrs = copy.deepcopy(b_ftrs[_pos_indices]), copy.deepcopy(b_ftrs[_neg_indices])
 
-                # start to do reinforcement learning
-                action = Agent.choose_action(b_ftrs)
-                org_action_stats = [np.mean(np.count_nonzero(action, 1)), np.mean(1536 - np.count_nonzero(action, 1))]
-                if i % 10000 == 0 and EPSILON >= 0.1:
-                    EPSILON -= args.rl_epsilon_decay
-                for a_idx in range(len(action)):
-                    action[a_idx] = np.where(np.random.random((ACTION_NUMS,)) < EPSILON, np.random.randint(0, 2, (ACTION_NUMS,)), action[a_idx])
-                action_stats = [np.mean(np.count_nonzero(action, 1)), np.mean(1536 - np.count_nonzero(action, 1))]
+                rl_actions = []
+                for sample_idx in range(args.rl_sample_num):
+                    # start to do reinforcement learning
+                    rl_actions.append(Agent.choose_action(b_ftrs))
 
-                cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * action})
-                pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs * action})
-                neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs * action})
-                cur_loss = np.log(1 + np.exp(dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)))
-                reward = cur_loss - b_loss
-                Agent.store_transition(b_ftrs, action, reward)
-                _dis_reward, _rl_loss, step = Agent.learn()
+                rl_rewards = []
+                for sample_idx in range(args.rl_sample_num):    
+                    cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * rl_actions[sample_idx]})
+                    pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs * rl_actions[sample_idx]})
+                    neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs * rl_actions[sample_idx]})
+                    cur_loss = np.log(1 + np.exp(dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)))
+                    rl_rewards.append(cur_loss - b_loss)
+                
+                # normalize reward
+                rl_rewards -= np.mean(rl_rewards, axis=0)
+                rl_rewards /= np.std(rl_rewards, axis=0)
+
+                rl_losses = []
+                for sample_idx in range(args.rl_sample_num):
+                    Agent.store_transition(b_ftrs, rl_actions[sample_idx], rl_rewards[sample_idx])
+                    rl_losses.append(Agent.learn())
+
+                # step = sess_rl.run(Agent.global_step)
                 elapsed_time = time.time() - start_time
-                log.info('RL | Step {} | EPSILON {:.2f} | Org Action {:.2f} | Action {:.2f} | Reward {: .4e} | Discounted Reward {: .4e} | Loss {: .4e} | Speed {:.2f}s/iter'.format(step, EPSILON, org_action_stats[0], action_stats[0], np.mean(reward), np.mean(_dis_reward), np.mean(_rl_loss), elapsed_time))
+                log.info('RL | Step {} | Action {:.2f} | Reward {: .4e} | Loss {: .4e} | Speed {:.2f}s/iter'.format(step, np.mean(np.count_nonzero(rl_actions, axis=2)), np.mean(rl_rewards), np.mean(rl_losses), elapsed_time))
 
                 '''
                 # Supervised Learning

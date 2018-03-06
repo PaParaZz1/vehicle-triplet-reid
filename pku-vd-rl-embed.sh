@@ -1,9 +1,12 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=4
-epoch=200
+export CUDA_VISIBLE_DEVICES=2
+source ../triplet-reid-rl-attention/venv/bin/activate
+
+epoch=20000
 dataset_size=''
-expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_finetune_rl_test'
+expr_dir='expr_attention_euclidean_fc1024_inception_finetune_rl_heavy_agent'
+# expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_finetune_rl_2'
 
 python embed_rl.py \
         --experiment_root ./experiments/pku-vd/${expr_dir} \
