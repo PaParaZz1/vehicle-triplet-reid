@@ -495,8 +495,10 @@ def main():
                 cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs_batch * rl_actions})
                 pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs_batch * rl_actions})
                 neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs_batch * rl_actions})
-                cur_loss = np.log(1 + np.exp(dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)))
-                rl_rewards = cur_loss - b_loss_batch
+                # cur_loss = np.log(1 + np.exp(dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)))
+                cur_loss = np.log(1 + np.exp(dist(cur_embs, pos_embs) - dist(cur_embs, neg_embs)))
+                # rl_rewards = cur_loss - b_loss_batch
+                rl_rewards = b_loss_batch - cur_loss
                 
                 # normalize reward
                 rl_rewards -= np.mean(rl_rewards, axis=0)

@@ -73,6 +73,10 @@ parser.add_argument(
     '--quiet', action='store_true', default=False,
     help='Don\'t be so verbose.')
 
+parser.add_argument(
+    '--rl_activation', default='sigmoid', choices=['sigmoid', 'softmax', 'norm_sigmoid', 'tanh'], 
+    help='choose activation function for reinforcement learning')
+
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 
@@ -210,7 +214,8 @@ def main():
 
     Agent = PolicyGradient(n_actions=1536,
                         n_features=1536,
-                        is_train=False)
+                        is_train=False,
+                        rl_activation=args.rl_activation)
 
     rl_graph, rl_init, rl_saver = Agent.train_handle()
     
@@ -238,7 +243,7 @@ def main():
             try:
                 b_ftrs = sess_sup.run(endpoints['model_output'])
                 action = Agent.choose_action(b_ftrs)
-                emb = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs*action})
+                emb = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * action})
 
                 print('\rEmbedded batch {}-{}/{}'.format(
                         start_idx, start_idx + len(emb), len(emb_storage)), 

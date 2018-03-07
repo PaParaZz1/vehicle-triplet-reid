@@ -79,9 +79,7 @@ class PolicyGradient:
 
                         if self.rl_activation == 'softmax':
                             self.all_act_prob = tf.nn.softmax(dense2, name='rl_act_prob')  # use softmax to convert to probability
-                        elif self.rl_activation == 'norm_sigmoid':
-                            self.all_act_prob = tf.sigmoid(dense2, name='rl_act_prob')
-                        elif self.rl_activation == 'sigmoid':
+                        elif self.rl_activation == 'norm_sigmoid' or self.rl_activation == 'sigmoid':
                             self.all_act_prob = tf.sigmoid(dense2, name='rl_act_prob')
                         elif self.rl_activation == 'tanh':
                             self.all_act_prob = tf.tanh(dense2, name='rl_act_prob')
@@ -124,10 +122,11 @@ class PolicyGradient:
                 action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
         else:
             # prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
-            # show_stats('prob', prob_weights)
-            # action = np.round(prob_weights)
-            # action = prob_weights
-            action = np.ones_like(prob_weights)
+            # action = np.around(prob_weights)
+            # action = np.where(prob_weights > 0.75, 
+            #         np.ones_like(prob_weights), np.zeros_like(prob_weights))
+            # print('action: {}'.format(np.mean(np.count_nonzero(action, axis=1))))
+            action = prob_weights
         return action
 
     def store_transition(self, s, a, r):
