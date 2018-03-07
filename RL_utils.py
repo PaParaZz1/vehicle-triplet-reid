@@ -118,9 +118,16 @@ class PolicyGradient:
         # else:
         #     action = prob_weights
         # print('shape of prob_weights: {}'.format(prob_weights.shape))
-        action = []
-        for batch in prob_weights:
-            action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
+        if self.is_train:
+            action = []
+            for batch in prob_weights:
+                action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
+        else:
+            # prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
+            # show_stats('prob', prob_weights)
+            # action = np.round(prob_weights)
+            # action = prob_weights
+            action = np.ones_like(prob_weights)
         return action
 
     def store_transition(self, s, a, r):

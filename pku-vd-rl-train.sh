@@ -4,7 +4,7 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=5
+export CUDA_VISIBLE_DEVICES=2
 
 source ../triplet-reid-rl-attention/venv/bin/activate
 
@@ -12,14 +12,15 @@ METRIC='euclidean'
 # HEADS='fc1024_inception_mixed_attention'
 HEADS='fc1024'
 BACKBONE='inception'
-EXPR_NAME='_finetune_rl_sample'
+EXPR_NAME='_finetune_rl_sample_para_1'
 # INIT_CHECKPT=./experiments/pku-vd/ckpt_inception_mixed_attention/checkpoint-240000 ; shift
 INIT_CHECKPT=./experiments/pku-vd/ckpt_inception_v4/checkpoint-285886 ; shift
 
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 
-python train_rl.py \
+# python train_rl.py \
+python train_rl_parallel.py \
     --train_set data/pku-vd/VD1_train.csv \
     --model_name ${BACKBONE} \
     --image_root $IMAGE_ROOT \
@@ -36,7 +37,7 @@ python train_rl.py \
     --margin soft \
     --metric ${METRIC} \
     --loss batch_hard \
-    --checkpoint_frequency 1000 \
+    --checkpoint_frequency 100 \
     --head_name ${HEADS} \
     --learning_rate 1e-5 \
     --train_iterations 400000 \
@@ -48,6 +49,6 @@ python train_rl.py \
     --rl_epsilon 0.6 \
     --rl_epsilon_decay 0.1 \
     --rl_activation sigmoid \
-    --rl_sample_num 10 \
+    --rl_sample_num 5 \
     "$@"
     # --resume \
