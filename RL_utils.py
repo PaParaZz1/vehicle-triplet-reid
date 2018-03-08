@@ -32,6 +32,7 @@ class PolicyGradient:
             output_graph=False,
             is_train=True,
             rl_activation='softmax',
+            rl_hidden_units=256,
             ):
 
         self.n_actions = n_actions
@@ -40,6 +41,7 @@ class PolicyGradient:
         self.gamma = reward_decay
         self.is_train = is_train
         self.rl_activation = rl_activation
+        self.rl_hidden_units = rl_hidden_units
 
         self.ep_obs, self.ep_as, self.ep_rs = None, None, None
 
@@ -74,7 +76,7 @@ class PolicyGradient:
                         self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="rl_observations")
                         self.tf_acts = tf.placeholder(tf.float32, [None, self.n_features], name="rl_actions_num")
                         self.tf_vt = tf.placeholder(tf.float32, [None, ], name="rl_actions_value")
-                        dense1 = slim.fully_connected(self.tf_obs, 1024, scope='rl_dense1')
+                        dense1 = slim.fully_connected(self.tf_obs, self.rl_hidden_units, scope='rl_dense1')
                         dense2 = slim.fully_connected(dense1, self.n_actions, scope='rl_dense2')
 
                         if self.rl_activation == 'softmax':
@@ -122,11 +124,11 @@ class PolicyGradient:
                 action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
         else:
             # prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
-            # action = np.around(prob_weights)
+            action = np.around(prob_weights)
             # action = np.where(prob_weights > 0.75, 
             #         np.ones_like(prob_weights), np.zeros_like(prob_weights))
             # print('action: {}'.format(np.mean(np.count_nonzero(action, axis=1))))
-            action = prob_weights
+            # action = prob_weights
         return action
 
     def store_transition(self, s, a, r):

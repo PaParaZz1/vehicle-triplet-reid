@@ -77,6 +77,11 @@ parser.add_argument(
     '--rl_activation', default='sigmoid', choices=['sigmoid', 'softmax', 'norm_sigmoid', 'tanh'], 
     help='choose activation function for reinforcement learning')
 
+parser.add_argument(
+    '--rl_hidden_units', default=256, type=common.positive_int,
+    help='number of hidden units in policy networks')
+
+
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 
@@ -215,7 +220,8 @@ def main():
     Agent = PolicyGradient(n_actions=1536,
                         n_features=1536,
                         is_train=False,
-                        rl_activation=args.rl_activation)
+                        rl_activation=args.rl_activation,
+                        rl_hidden_units=args.rl_hidden_units)
 
     rl_graph, rl_init, rl_saver = Agent.train_handle()
     

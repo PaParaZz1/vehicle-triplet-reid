@@ -1,17 +1,11 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=4
-epoch=80000
+export CUDA_VISIBLE_DEVICES=3
+source ../triplet-reid-rl-attention/venv/bin/activate
+
+epoch=285886
 dataset_size=''
-# expr_dir='expr_attention_euclidean_fc1024_inception_residual_attention_light_inception_fixed_finetune_0'
-# expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_finetune_0'
-# expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_fixed_finetune_0'
-# expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_fixed_finetune_0'
-# expr_dir='expr_attention_euclidean_fc1024_inception_multi-resolution_spatial_attention_inception_finetune_0'
-# expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_fixed_finetune_0'
-# expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_finetune_0'
-expr_dir='expr_attention_euclidean_fc1024_inception_residual_attention_light_inception_finetune_0'
-# expr_dir='expr_attention_euclidean_fc1024_inception_spatial_attention_inception_finetune_4'
+expr_dir='ckpt_inception_v4'
 
 python embed.py \
         --experiment_root ./experiments/pku-vd/${expr_dir} \

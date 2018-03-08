@@ -502,7 +502,7 @@ def main():
                 
                 # normalize reward
                 rl_rewards -= np.mean(rl_rewards, axis=0)
-                rl_rewards /= np.std(rl_rewards, axis=0)
+                # rl_rewards /= np.std(rl_rewards, axis=0)
 
                 Agent.store_transition(b_ftrs_batch, rl_actions, rl_rewards)
                 rl_losses = Agent.learn()
@@ -510,42 +510,6 @@ def main():
                 # step = sess_rl.run(Agent.global_step)
                 elapsed_time = time.time() - start_time
                 log.info('RL | Step {} | Action {:.2f} | Reward {: .4e} | Loss {: .4e} | Speed {:.2f}s/iter'.format(step, np.mean(np.count_nonzero(rl_actions, axis=1)), np.mean(rl_rewards), np.mean(rl_losses), elapsed_time))
-
-                '''
-                # Supervised Learning
-                sup_iter = tf.data.Dataset.from_tensor_slices((b_imgs, b_fids, b_pids)).batch(args.batch_p * args.batch_k).prefetch(args.batch_p * args.batch_k).make_one_shot_iterator()
-                sup_handle = sess.run(sup_iter.string_handle())
-                _, summary, step, b_prec_at_k, b_embs, b_loss, b_fids, \
-                _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
-                    sess.run([train_op, merged_summary, global_step, \
-                    prec_at_k, endpoints['emb'], losses, fids, \
-                    pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:sup_handle})
-                elapsed_time = time.time() - start_time
-
-                # Compute the iteration speed and add it to the summary.
-                # We did observe some weird spikes that we couldn't track down.
-                summary2 = tf.Summary()
-                summary2.value.add(tag='secs_per_iter', simple_value=elapsed_time)
-                summary_writer.add_summary(summary2, step)
-                summary_writer.add_summary(summary, step)
-
-                if args.detailed_logs:
-                    log_embs[i], log_loss[i], log_fids[i] = b_embs, b_loss, b_fids
-
-                # Do a huge print out of the current progress.
-                seconds_todo = (args.train_iterations - step) * elapsed_time
-                log.info('iter:{:6d}, loss min|avg|max: {:.3f}|{:.3f}|{:6.3f}, '
-                         'batch-p@{}: {:.2%}, ETA: {} ({:.2f}s/it)'.format(
-                             step,
-                             float(np.min(b_loss)),
-                             float(np.mean(b_loss)),
-                             float(np.max(b_loss)),
-                             args.batch_k-1, float(b_prec_at_k),
-                             timedelta(seconds=int(seconds_todo)),
-                             elapsed_time))
-                sys.stdout.flush()
-                sys.stderr.flush()
-                '''
 
                 # Save a checkpoint of training every so often.
                 if (args.checkpoint_frequency > 0 and step % args.checkpoint_frequency == 0):
