@@ -1,7 +1,7 @@
 import tensorflow as tf
 from tensorflow.contrib import slim
 
-head_num = 5
+head_num = 8
 CONSTRAINT_WEIGHT = 1.0
 feature_size = 5
 

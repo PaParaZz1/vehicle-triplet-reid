@@ -2,7 +2,7 @@
 from argparse import ArgumentParser
 from importlib import import_module
 from itertools import count
-import os
+import os, sys
 
 import h5py
 import json
@@ -202,9 +202,6 @@ def main():
     endpoints, body_prefix = model.endpoints(images, is_training=False)
     with tf.name_scope('head'):
         endpoints = head.head(endpoints, args.embedding_dim, is_training=False)
-        attention_masks = []
-        for bi in range(5):
-            attention_masks.append(endpoints['attention_mask{}'.format(bi)])
 
     with h5py.File(args.filename, 'w') as f_out, tf.Session(config=config) as sess:
         # Initialize the network/load the checkpoint.
@@ -219,25 +216,27 @@ def main():
         # Go ahead and embed the whole dataset, with all augmented versions too.
         emb_storage = np.zeros(
             (len(data_fids) * len(modifiers), args.embedding_dim), np.float32)
+        
+        sorted_map_idx = np.random.choice(1536, 20)
+
         for start_idx in count(step=args.batch_size):
             try:
-                emb, _attmaps1, _attmaps2, _attmaps3, _attmaps4, _attmaps5, _images, _fids, _pids = sess.run([endpoints['emb'], *attention_masks, images, fids, pids])
+                emb, _att_map, _images, _fids, _pids = sess.run([endpoints['emb'], endpoints['attention_mask'], images, fids, pids])
                 print('\rEmbedded batch {}-{}/{}'.format(
                         start_idx, start_idx + len(emb), len(emb_storage)), 
                     flush=True, end='')
                 emb_storage[start_idx:start_idx + len(emb)] = emb
                 if not os.path.exists('attention_maps'):
                     os.mkdir('attention_maps')
-                # print(np.array(_fids).shape)
                 _fids = [x.decode().split('/')[-1].split('.')[0] for x in _fids]
                 _pids = [x.decode() for x in _pids]
-                _attmaps = [_attmaps1, _attmaps2, _attmaps3, _attmaps4, _attmaps5]
-                for batch_idx in range(len(_attmaps[0])):
+                print('shape of att map: {}'.format(np.array(_att_map).shape))
+                for batch_idx in range(len(_att_map)):
                     print('process image {}:{}'.format(_pids[batch_idx], _fids[batch_idx]))
                     cv2.imwrite(os.path.join('attention_maps', '{}_{}_origin.jpg'.format(_pids[batch_idx], _fids[batch_idx])), _images[batch_idx].astype(np.uint8))
-                    for att_idx in range(len(_attmaps)):
-                        normed_map = (_attmaps[att_idx][batch_idx] - np.min(_attmaps[att_idx][batch_idx])) / (np.max(_attmaps[att_idx][batch_idx]) - np.min(_attmaps[att_idx][batch_idx]))
-                        _enlarged = cv2.resize(_attmaps[att_idx][batch_idx], (224, 224), interpolation=cv2.INTER_CUBIC)
+                    for att_idx in sorted_map_idx:
+                        normed_map = (_att_map[batch_idx][:, :, att_idx] - np.min(_att_map[batch_idx][:, :, att_idx])) / (np.max(_att_map[batch_idx][:, :, att_idx]) - np.min(_att_map[batch_idx][:, :, att_idx]))
+                        _enlarged = cv2.resize(_att_map[batch_idx][:, :, att_idx], (224, 224), interpolation=cv2.INTER_CUBIC)
                         norm_enlarged = cv2.resize(normed_map, (224, 224), interpolation=cv2.INTER_CUBIC)
                         _enlarged = np.expand_dims(_enlarged, 2)
                         norm_enlarged = np.expand_dims(norm_enlarged, 2)
@@ -246,9 +245,11 @@ def main():
                         _masked.astype(np.uint8)
                         norm_masked.astype(np.uint8)
                         _enlarged = _enlarged * 255
-                        # cv2.imwrite(os.path.join('attention_maps', '{}_{}_masked_branch_{}.jpg'.format(_pids[batch_idx], _fids[batch_idx], att_idx)), _masked)
+                        cv2.imwrite(os.path.join('attention_maps', '{}_{}_masked_branch_{}.jpg'.format(_pids[batch_idx], _fids[batch_idx], att_idx)), _masked)
                         cv2.imwrite(os.path.join('attention_maps', '{}_{}_norm_masked_branch_{}.jpg'.format(_pids[batch_idx], _fids[batch_idx], att_idx)), norm_masked)
-                        # cv2.imwrite(os.path.join('attention_maps', '{}_{}_mask_branch_{}.jpg'.format(_pids[batch_idx], _fids[batch_idx], att_idx)), _enlarged.astype(np.uint8))
+                        cv2.imwrite(os.path.join('attention_maps', '{}_{}_mask_branch_{}.jpg'.format(_pids[batch_idx], _fids[batch_idx], att_idx)), _enlarged.astype(np.uint8))
+                    if batch_idx == 50:
+                        sys.exit()
 
             except tf.errors.OutOfRangeError:
                 break  # This just indicates the end of the dataset.
