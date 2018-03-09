@@ -105,19 +105,9 @@ class PolicyGradient:
             self.saver_rl = tf.train.Saver(max_to_keep=0)
 
     def choose_action(self, observation):
-        # prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: np.expand_dims(observation, 0)})
         prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: observation})
-        # action = np.random.choice(range(prob_weights.shape[1]), p=prob_weights.ravel())  # select action w.r.t the actions prob
-        # action = [np.random.choice(range(prob_weights.shape[1]), p=prob_weights[i]) for i in range(len(prob_weights))]
         if self.rl_activation == 'norm_sigmoid':
             prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
-        # if self.is_train:
-        #     show_stats('prob', prob_weights)
-        # if self.is_train:
-        #     action = np.round(prob_weights)
-        # else:
-        #     action = prob_weights
-        # print('shape of prob_weights: {}'.format(prob_weights.shape))
         if self.is_train:
             action = []
             for batch in prob_weights:
@@ -168,6 +158,141 @@ class PolicyGradient:
         # discounted_ep_rs -= np.mean(discounted_ep_rs)
         # discounted_ep_rs /= np.std(discounted_ep_rs)
         return discounted_ep_rs
+
+
+class PolicyGradient_MultiHead:
+    def __init__(
+            self,
+            n_actions,
+            n_features,
+            learning_rate=0.01,
+            reward_decay=0.95,
+            output_graph=False,
+            is_train=True,
+            rl_activation='softmax',
+            rl_hidden_units=256,
+            ):
+
+        self.n_actions = n_actions
+        self.n_features = n_features
+        self.lr = learning_rate
+        self.gamma = reward_decay
+        self.is_train = is_train
+        self.rl_activation = rl_activation
+        self.rl_hidden_units = rl_hidden_units
+
+        self.ep_obs, self.ep_as, self.ep_rs = None, None, None
+
+        self.g_rl = tf.Graph()
+        self._build_net()
+
+    def train_handle(self):
+        return self.g_rl, self.init_rl, self.saver_rl
+
+    def get_sess(self, sess):
+        self.sess = sess
+
+    def _build_net(self):
+        batch_norm_params = {
+                'decay': 0.9,
+                'epsilon': 1e-5,
+                'scale': True,
+                'updates_collections': tf.GraphKeys.UPDATE_OPS,
+                'fused': None,
+                }
+        with self.g_rl.as_default():
+            with slim.arg_scope(
+                    [slim.fully_connected],
+                    # is_training=is_train,
+                    weights_regularizer=slim.l2_regularizer(0.0),
+                    weights_initializer=slim.variance_scaling_initializer(),
+                    activation_fn=tf.nn.relu,
+                    normalizer_fn=slim.batch_norm,
+                    normalizer_params=batch_norm_params):
+                with slim.arg_scope([slim.batch_norm], **batch_norm_params):
+                    with tf.name_scope('inputs'):
+                        self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="rl_observations")
+                        self.tf_acts = tf.placeholder(tf.float32, [None, self.n_features], name="rl_actions_num")
+                        self.tf_vt = tf.placeholder(tf.float32, [None, ], name="rl_actions_value")
+                        dense1 = slim.fully_connected(self.tf_obs, self.rl_hidden_units, scope='rl_dense1')
+                        dense2 = slim.fully_connected(dense1, self.n_actions, scope='rl_dense2')
+
+                        if self.rl_activation == 'softmax':
+                            self.all_act_prob = tf.nn.softmax(dense2, name='rl_act_prob')  # use softmax to convert to probability
+                        elif self.rl_activation == 'norm_sigmoid' or self.rl_activation == 'sigmoid':
+                            self.all_act_prob = tf.sigmoid(dense2, name='rl_act_prob')
+                        elif self.rl_activation == 'tanh':
+                            self.all_act_prob = tf.tanh(dense2, name='rl_act_prob')
+                        elif self.rl_activation == 'linear':
+                            self.all_act_prob = dense2
+
+            with tf.name_scope('loss'):
+                neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob * self.tf_acts + \
+                        (1 - self.all_act_prob) * (1 - self.tf_acts)), axis=1)
+                self.loss = tf.reduce_mean(neg_log_prob * self.tf_vt)  # reward guided loss
+
+            with tf.name_scope('train'):
+                self.global_step = tf.Variable(0, name='global_step', trainable=False)
+                self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=self.global_step)
+            self.init_rl = tf.global_variables_initializer()
+            self.saver_rl = tf.train.Saver(max_to_keep=0)
+
+    def choose_action(self, observation):
+        prob_weights = self.sess.run(self.all_act_prob, feed_dict={self.tf_obs: observation})
+        if self.rl_activation == 'norm_sigmoid':
+            prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
+        if self.is_train:
+            action = []
+            for batch in prob_weights:
+                action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
+        else:
+            # prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
+            action = np.around(prob_weights)
+            # action = np.where(prob_weights > 0.75, 
+            #         np.ones_like(prob_weights), np.zeros_like(prob_weights))
+            # print('action: {}'.format(np.mean(np.count_nonzero(action, axis=1))))
+            # action = prob_weights
+        return action
+
+    def store_transition(self, s, a, r):
+        self.ep_obs = s
+        self.ep_as = a
+        self.ep_rs = r
+
+    def learn(self):
+        if len(self.ep_as) == 0:
+            return None, None
+        # discount and normalize episode reward
+        # discounted_ep_rs_norm = self._discount_and_norm_rewards()
+        discounted_ep_rs_norm = self.ep_rs
+
+        # train on episode
+        _ , _loss = self.sess.run([self.train_op, self.loss], feed_dict={
+             self.tf_obs: np.vstack(self.ep_obs),  # shape=[None, n_obs]
+             self.tf_acts: np.array(self.ep_as),  # shape=[None, ]
+             self.tf_vt: discounted_ep_rs_norm,  # shape=[None, ]
+        })
+
+        self.ep_obs, self.ep_as, self.ep_rs = None, None, None    # empty episode data
+        return _loss
+
+    def _discount_and_norm_rewards(self):
+        # discount episode rewards
+        '''
+        discounted_ep_rs = np.zeros_like(self.ep_rs)
+        running_add = 0.
+        for t in reversed(range(0, len(self.ep_rs))):
+            running_add = running_add * self.gamma + self.ep_rs[t]
+            discounted_ep_rs[t] = running_add
+        '''
+        discounted_ep_rs = self.ep_rs
+
+        # normalize episode rewards
+        # discounted_ep_rs -= np.mean(discounted_ep_rs)
+        # discounted_ep_rs /= np.std(discounted_ep_rs)
+        return discounted_ep_rs
+
+
 
 
 class TripletStorage(object):

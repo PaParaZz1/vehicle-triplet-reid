@@ -21,7 +21,7 @@ import lbtoolbox as lb
 import loss
 from nets import NET_CHOICES
 from heads import HEAD_CHOICES
-from RL_utils import TripletStorage, PolicyGradient
+from RL_utils import TripletStorage, PolicyGradient, PolicyGradient_MultiHead
 from utils import show_stats
 
 config = tf.ConfigProto()
@@ -190,7 +190,7 @@ parser.add_argument(
     help='number of hidden units in policy networks')
 
 parser.add_argument(
-    '--rl_baseline', default='mean', choices=['mean', 'mean-std', 'none'],
+    '--rl_baseline', default='mean-std', choices=['mean', 'mean-std', 'none'],
     help='use different baseline')
 
 
@@ -385,7 +385,6 @@ def main():
         # Define a saver for the complete model.
         sup_saver = tf.train.Saver(max_to_keep=0)
         sup_init = tf.global_variables_initializer()
-        
 
     # Some logging for tensorboard.
     tf.summary.histogram('loss_distribution', losses)
@@ -414,12 +413,12 @@ def main():
             dtype='S' + str(max_fid_len), shape=(args.train_iterations, batch_size))
 
     # set params for reinforcement learning
-    ACTION_NUMS = 1536
+    ACTION_NUMS = 5
     EPSILON = args.rl_epsilon
     # create agent
-    Agent = PolicyGradient(
+    Agent = PolicyGradient_MultiHead(
             n_actions=ACTION_NUMS,
-            n_features=1536,
+            n_features=7680,
             learning_rate=args.rl_learning_rate,
             reward_decay=args.rl_reward_decay,
             is_train=True,
@@ -490,9 +489,10 @@ def main():
 
                 rl_rewards = []
                 for sample_idx in range(args.rl_sample_num):    
-                    cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * rl_actions[sample_idx]})
-                    pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs * rl_actions[sample_idx]})
-                    neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs * rl_actions[sample_idx]})
+                    repeated_rl_actions = np.repeat(rl_actions, 1536, axis=1)
+                    cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * repeated_rl_actions})
+                    pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs * repeated_rl_actions})
+                    neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs * repeated_rl_actions})
                     cur_loss = np.log(1 + np.exp(dist(cur_embs, pos_embs) - dist(cur_embs, neg_embs)))
                     rl_rewards.append(b_loss - cur_loss)
                 

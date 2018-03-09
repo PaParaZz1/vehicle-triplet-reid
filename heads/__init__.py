@@ -16,6 +16,7 @@ HEAD_CHOICES = (
     'fc1024_inception_multi-head_attention',
     'fc1024_inception_multi-head_residual_attention',
     'fc1024_inception_multi-residual-head_attention',
+    'fc1024_inception_multi-residual-head_attention_5_branch',
     'fc1024_inception_min-max_spatial_attention', 
     'fc1024_inception_residual_attention_light_tanh',
     'fc1024_residual_attention-heavy',
