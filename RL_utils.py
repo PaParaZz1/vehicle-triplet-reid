@@ -33,6 +33,9 @@ class PolicyGradient:
             is_train=True,
             rl_activation='softmax',
             rl_hidden_units=256,
+            rl_decay_start_iteration=1000,
+            rl_lr_decay_steps=2000,
+            rl_lr_decay_factor=0.9,
             ):
 
         self.n_actions = n_actions
@@ -42,6 +45,9 @@ class PolicyGradient:
         self.is_train = is_train
         self.rl_activation = rl_activation
         self.rl_hidden_units = rl_hidden_units
+        self.decay_start_iteration = rl_decay_start_iteration
+        self.lr_decay_steps = rl_lr_decay_steps
+        self.lr_decay_factor = rl_lr_decay_factor
 
         self.ep_obs, self.ep_as, self.ep_rs = None, None, None
 
@@ -100,7 +106,11 @@ class PolicyGradient:
 
             with tf.name_scope('train'):
                 self.global_step = tf.Variable(0, name='global_step', trainable=False)
-                self.train_op = tf.train.AdamOptimizer(self.lr).minimize(self.loss, global_step=self.global_step)
+                self.learning_rate = tf.train.exponential_decay(
+                        self.lr,
+                        tf.maximum(0, self.global_step - self.decay_start_iteration),
+                        self.lr_decay_steps, self.lr_decay_factor, staircase=True)
+                self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss, global_step=self.global_step)
             self.init_rl = tf.global_variables_initializer()
             self.saver_rl = tf.train.Saver(max_to_keep=0)
 
@@ -134,14 +144,14 @@ class PolicyGradient:
         discounted_ep_rs_norm = self.ep_rs
 
         # train on episode
-        _ , _loss = self.sess.run([self.train_op, self.loss], feed_dict={
+        _ , _loss, _lr = self.sess.run([self.train_op, self.loss, self.learning_rate], feed_dict={
              self.tf_obs: np.vstack(self.ep_obs),  # shape=[None, n_obs]
              self.tf_acts: np.array(self.ep_as),  # shape=[None, ]
              self.tf_vt: discounted_ep_rs_norm,  # shape=[None, ]
         })
 
         self.ep_obs, self.ep_as, self.ep_rs = None, None, None    # empty episode data
-        return _loss
+        return _loss, _lr
 
     def _discount_and_norm_rewards(self):
         # discount episode rewards
@@ -212,7 +222,7 @@ class PolicyGradient_MultiHead:
                 with slim.arg_scope([slim.batch_norm], **batch_norm_params):
                     with tf.name_scope('inputs'):
                         self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="rl_observations")
-                        self.tf_acts = tf.placeholder(tf.float32, [None, self.n_features], name="rl_actions_num")
+                        self.tf_acts = tf.placeholder(tf.float32, [None, self.n_actions], name="rl_actions_num")
                         self.tf_vt = tf.placeholder(tf.float32, [None, ], name="rl_actions_value")
                         dense1 = slim.fully_connected(self.tf_obs, self.rl_hidden_units, scope='rl_dense1')
                         dense2 = slim.fully_connected(dense1, self.n_actions, scope='rl_dense2')
@@ -246,12 +256,8 @@ class PolicyGradient_MultiHead:
             for batch in prob_weights:
                 action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
         else:
-            # prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
-            action = np.around(prob_weights)
-            # action = np.where(prob_weights > 0.75, 
-            #         np.ones_like(prob_weights), np.zeros_like(prob_weights))
-            # print('action: {}'.format(np.mean(np.count_nonzero(action, axis=1))))
-            # action = prob_weights
+            # action = np.around(prob_weights)
+            action = prob_weights
         return action
 
     def store_transition(self, s, a, r):

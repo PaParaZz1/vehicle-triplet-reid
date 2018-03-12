@@ -185,6 +185,21 @@ parser.add_argument(
     '--rl_sample_num', default=10, type=common.positive_int,
     help='number of action samples')
 
+parser.add_argument(
+    '--rl_hidden_units', default=256, type=common.positive_int)
+
+parser.add_argument(
+    '--rl_baseline', default='mean-std', choices=['mean', 'mean-std', 'none'])
+
+parser.add_argument(
+    '--rl_decay_start_iteration', default=1000, type=common.positive_int)
+
+parser.add_argument(
+    '--rl_lr_decay_steps', default=2000, type=common.positive_int)
+
+parser.add_argument(
+    '--rl_lr_decay_factor', default=0.9, type=common.positive_float)
+
 
 def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
     """ Given a PID, select K FIDs of that specific PID. """
@@ -417,6 +432,10 @@ def main():
             reward_decay=args.rl_reward_decay,
             is_train=True,
             rl_activation=args.rl_activation,
+            rl_hidden_units=args.rl_hidden_units,
+            rl_decay_start_iteration=args.rl_decay_start_iteration,
+            rl_lr_decay_steps=args.rl_lr_decay_steps,
+            rl_lr_decay_factor=args.rl_lr_decay_factor,
             )
     rl_graph, rl_init, rl_saver = Agent.train_handle()
 
@@ -501,15 +520,18 @@ def main():
                 rl_rewards = b_loss_batch - cur_loss
                 
                 # normalize reward
-                rl_rewards -= np.mean(rl_rewards, axis=0)
-                # rl_rewards /= np.std(rl_rewards, axis=0)
+                if args.rl_baseline == 'mean':
+                    rl_rewards -= np.mean(rl_rewards, axis=0)
+                elif args.rl_baseline == 'mean-std':
+                    rl_rewards -= np.mean(rl_rewards, axis=0)
+                    rl_rewards /= np.std(rl_rewards, axis=0)
 
                 Agent.store_transition(b_ftrs_batch, rl_actions, rl_rewards)
-                rl_losses = Agent.learn()
+                rl_losses, rl_lr = Agent.learn()
 
                 # step = sess_rl.run(Agent.global_step)
                 elapsed_time = time.time() - start_time
-                log.info('RL | Step {} | Action {:.2f} | Reward {: .4e} | Loss {: .4e} | Speed {:.2f}s/iter'.format(step, np.mean(np.count_nonzero(rl_actions, axis=1)), np.mean(rl_rewards), np.mean(rl_losses), elapsed_time))
+                log.info('RL | Step {} | lr {:.5e} | Action {:.2f} | Reward {: .4e} | Loss {: .4e} | Speed {:.2f}s/iter'.format(step, rl_lr, np.mean(np.count_nonzero(rl_actions, axis=1)), np.mean(rl_rewards), np.mean(rl_losses), elapsed_time))
 
                 # Save a checkpoint of training every so often.
                 if (args.checkpoint_frequency > 0 and step % args.checkpoint_frequency == 0):

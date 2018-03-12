@@ -489,7 +489,7 @@ def main():
 
                 rl_rewards = []
                 for sample_idx in range(args.rl_sample_num):    
-                    repeated_rl_actions = np.repeat(rl_actions, 1536, axis=1)
+                    repeated_rl_actions = np.repeat(rl_actions[sample_idx], 1536, axis=1)
                     cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * repeated_rl_actions})
                     pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs * repeated_rl_actions})
                     neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs * repeated_rl_actions})

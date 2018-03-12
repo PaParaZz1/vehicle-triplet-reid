@@ -3,12 +3,12 @@
 export CUDA_VISIBLE_DEVICES=3
 source ../triplet-reid-rl-attention/venv/bin/activate
 
-epoch=6000
+epoch=9000
 dataset_size=''
-HIDDEN_UNITS=256
-expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_rl_256_ft_1'
+HIDDEN_UNITS=512
+# expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_rl_256_ft_1'
 # expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_rl_128_ft_0'
-# expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_rl_512_ft_0'
+expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_rl_512_ft_0'
 # expr_dir='expr_attention_euclidean_fc1024_inception_mixed_attention_inception_finetune_rl_256_2'
 
 python embed_rl.py \
