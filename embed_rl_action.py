@@ -80,10 +80,6 @@ parser.add_argument(
 parser.add_argument(
     '--rl_hidden_units', nargs='+', type=int)
 
-parser.add_argument(
-    '--emb_type', default='sup', choices=['sup', 'rl'], 
-    help='choose activation function for reinforcement learning')
-
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -120,8 +116,7 @@ def main():
     if args.filename is None:
         basename = os.path.basename(args.dataset)
         args.filename = os.path.splitext(basename)[0] + '_embeddings.h5'
-    fn_slt = args.filename.split('_')
-    args.filename = os.path.join(args.experiment_root, '{}_{}_{}'.format('_'.join(fn_slt[:-1]),args.emb_type, fn_slt[-1]))
+    args.filename = os.path.join(args.experiment_root, args.filename)
 
     # Load the args from the original experiment.
     args_file = os.path.join(args.experiment_root, 'args.json')
@@ -246,19 +241,20 @@ def main():
         sup_saver.restore(sess_sup, checkpoint_sup)
         rl_saver.restore(sess_rl, checkpoint_rl)
 
+        actions = 0
+        sample_num = 0
         # Go ahead and embed the whole dataset, with all augmented versions too.
         emb_storage = np.zeros(
             (len(data_fids) * len(modifiers), args.embedding_dim), np.float32)
-        rl_emb_storage = np.zeros(
-            (len(data_fids) * len(modifiers), args.embedding_dim), np.float32)
         for start_idx in count(step=args.batch_size):
             try:
-                if args.emb_type == 'sup':
-                    emb = sess_sup.run(endpoints['emb'])
-                else:
-                    b_ftrs = sess_sup.run(endpoints['model_output'])
-                    action = Agent.choose_action(b_ftrs)
-                    emb = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * action})
+                b_ftrs = sess_sup.run(endpoints['model_output'])
+                print('feature: {}'.format(np.mean(b_ftrs)))
+                action = Agent.choose_action(b_ftrs)
+                actions += np.sum(np.count_nonzero(action, axis=1))
+                print('curr actions {}'.format(np.mean(np.count_nonzero(action, axis=1))))
+                sample_num += len(action)
+                emb = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs * action})
 
                 print('\rEmbedded batch {}-{}/{}'.format(
                         start_idx, start_idx + len(emb), len(emb_storage)), 
@@ -266,6 +262,7 @@ def main():
                 emb_storage[start_idx:start_idx + len(emb)] = emb
             except tf.errors.OutOfRangeError:
                 break  # This just indicates the end of the dataset.
+        print('total sample {} | total action {} | average action {}'.format(sample_num, actions, actions / float(sample_num)))
 
         print()
         if not args.quiet:

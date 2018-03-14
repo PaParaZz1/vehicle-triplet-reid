@@ -462,7 +462,8 @@ def main():
             sess_sup.run(sup_init)
             sess_rl.run(rl_init)
             if args.initial_checkpoint is not None:
-                saver = tf.train.Saver(model_variables)
+                saver = tf.train.Saver()
+                # saver = tf.train.Saver(model_variables)
                 saver.restore(sess_sup, args.initial_checkpoint)
 
             # In any case, we also store this initialization as a checkpoint,

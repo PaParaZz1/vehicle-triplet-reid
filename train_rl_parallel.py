@@ -186,7 +186,7 @@ parser.add_argument(
     help='number of action samples')
 
 parser.add_argument(
-    '--rl_hidden_units', default=256, type=common.positive_int)
+    '--rl_hidden_units', nargs='+', type=int)
 
 parser.add_argument(
     '--rl_baseline', default='mean-std', choices=['mean', 'mean-std', 'none'])
@@ -388,7 +388,8 @@ def main():
         # These are collected here before we add the optimizer, because depending
         # on the optimizer, it might add extra slots, which are also global
         # variables, with the exact same prefix.
-        model_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, body_prefix)
+        model_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, body_prefix) + \
+                tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, 'head')
         
         # Define a saver for the complete model.
         sup_saver = tf.train.Saver(max_to_keep=0)
@@ -458,8 +459,9 @@ def main():
             sess_sup.run(sup_init)
             sess_rl.run(rl_init)
             if args.initial_checkpoint is not None:
-                saver = tf.train.Saver(model_variables)
-                saver.restore(sess_sup, args.initial_checkpoint)
+                # saver = tf.train.Saver(model_variables)
+                # saver = tf.train.Saver()
+                sup_saver.restore(sess_sup, args.initial_checkpoint)
 
             # In any case, we also store this initialization as a checkpoint,
             # such that we could run exactly reproduceable experiments.

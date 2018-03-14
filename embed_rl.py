@@ -78,8 +78,7 @@ parser.add_argument(
     help='choose activation function for reinforcement learning')
 
 parser.add_argument(
-    '--rl_hidden_units', default=256, type=common.positive_int,
-    help='number of hidden units in policy networks')
+    '--rl_hidden_units', nargs='+', type=int)
 
 
 config = tf.ConfigProto()

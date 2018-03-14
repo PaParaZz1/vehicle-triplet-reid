@@ -32,7 +32,7 @@ class PolicyGradient:
             output_graph=False,
             is_train=True,
             rl_activation='softmax',
-            rl_hidden_units=256,
+            rl_hidden_units=[256],
             rl_decay_start_iteration=1000,
             rl_lr_decay_steps=2000,
             rl_lr_decay_factor=0.9,
@@ -82,8 +82,11 @@ class PolicyGradient:
                         self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="rl_observations")
                         self.tf_acts = tf.placeholder(tf.float32, [None, self.n_features], name="rl_actions_num")
                         self.tf_vt = tf.placeholder(tf.float32, [None, ], name="rl_actions_value")
-                        dense1 = slim.fully_connected(self.tf_obs, self.rl_hidden_units, scope='rl_dense1')
-                        dense2 = slim.fully_connected(dense1, self.n_actions, scope='rl_dense2')
+                        dense = slim.fully_connected(self.tf_obs, self.rl_hidden_units[0], scope='rl_dense1')
+                        for dense_idx in range(1, len(self.rl_hidden_units)):
+                            dense = slim.fully_connected(dense, self.rl_hidden_units[dense_idx], scope='rl_dense{}'.format(dense_idx + 1))
+                        # dense2 = slim.fully_connected(dense, self.n_actions, scope='rl_dense{}'.format(len(self.rl_hidden_units)+1), activation_fn=None)
+                        dense2 = slim.fully_connected(dense, self.n_actions, scope='rl_dense{}'.format(len(self.rl_hidden_units)+1))
 
                         if self.rl_activation == 'softmax':
                             self.all_act_prob = tf.nn.softmax(dense2, name='rl_act_prob')  # use softmax to convert to probability
@@ -93,6 +96,7 @@ class PolicyGradient:
                             self.all_act_prob = tf.tanh(dense2, name='rl_act_prob')
                         elif self.rl_activation == 'linear':
                             self.all_act_prob = dense2
+                        # self.all_act_prob = self.all_act_prob * 0.98 + 0.01
 
             with tf.name_scope('loss'):
                 # to maximize total reward (log_p * R) is to minimize -(log_p * R), and the tf only have minimize(loss)
@@ -119,16 +123,13 @@ class PolicyGradient:
         if self.rl_activation == 'norm_sigmoid':
             prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
         if self.is_train:
+            prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-8) * 0.98 + 0.01 for x in prob_weights]
             action = []
             for batch in prob_weights:
                 action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
         else:
-            # prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
+            prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-8) for x in prob_weights]
             action = np.around(prob_weights)
-            # action = np.where(prob_weights > 0.75, 
-            #         np.ones_like(prob_weights), np.zeros_like(prob_weights))
-            # print('action: {}'.format(np.mean(np.count_nonzero(action, axis=1))))
-            # action = prob_weights
         return action
 
     def store_transition(self, s, a, r):
