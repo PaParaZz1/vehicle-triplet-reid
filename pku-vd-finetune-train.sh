@@ -4,16 +4,14 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=3
+export CUDA_VISIBLE_DEVICES=6,7
 
-source ./venv/bin/activate
+source ../triplet-reid-rl-attention/venv/bin/activate
 
 METRIC='euclidean'
-# HEADS='fc1024_inception_MBA_5b_multi_embs'
 HEADS='fc1024_inception_MBA_5b_addition'
 BACKBONE='inception'
 TRAIN_PART='total'
-# EXPR_NAME='_0'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 if [ ${BACKBONE} == 'resnet_v2_50' ]; then
@@ -52,7 +50,6 @@ python ${PROCESSOR} \
     --experiment_root $EXP_ROOT \
     --flip_augment \
     --crop_augment \
-    --detailed_logs \
     --embedding_dim 128 \
     --batch_p 18 \
     --batch_k 4 \
@@ -68,5 +65,6 @@ python ${PROCESSOR} \
     --lr_decay_factor 0.96 \
     --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
-    # --resume \
     "$@"
+    # --resume \
+    # --detailed_logs \

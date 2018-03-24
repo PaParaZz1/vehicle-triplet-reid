@@ -18,9 +18,11 @@ import lbtoolbox as lb
 import loss
 from nets import NET_CHOICES
 from heads import HEAD_CHOICES
+from utils import available_gpu_num, get_available_gpus, make_parallel
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
+config.allow_soft_placement = True
 
 parser = ArgumentParser(description='Train a ReID network.')
 
@@ -294,27 +296,39 @@ def main():
     model = import_module('nets.' + args.model_name)
     head = import_module('heads.' + args.head_name)
 
-    # Feed the image through the model. The returned `body_prefix` will be used
-    # further down to load the pre-trained weights for all variables with this
-    # prefix.
-    endpoints, body_prefix = model.endpoints(images, is_training=True)
-    with tf.name_scope('head'):
-        endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
+    def get_model(images, fids, pids):
+        global endpoints, body_prefix
+        global dists, neg_dists, pos_dists
+        global losses, train_top1, prec_at_k, num_active
+        # Feed the image through the model. The returned `body_prefix` will be used
+        # further down to load the pre-trained weights for all variables with this
+        # prefix.
+        endpoints, body_prefix = model.endpoints(images, is_training=True)
+        with tf.name_scope('head'):
+            endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
+        
+        # Create the loss in two steps:
+        # 1. Compute all pairwise distances according to the specified metric.
+        # 2. For each anchor along the first dimension, compute its loss.
+        dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
+        losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
+            dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
+        
+        # Count the number of active entries, and compute the total batch loss.
+        num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
+        loss_mean = tf.reduce_mean(losses, keep_dims=True)
 
-    # Create the loss in two steps:
-    # 1. Compute all pairwise distances according to the specified metric.
-    # 2. For each anchor along the first dimension, compute its loss.
-    dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
-    losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
-        dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
+        return loss_mean
 
-    # Count the number of active entries, and compute the total batch loss.
-    num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
-    loss_mean = tf.reduce_mean(losses)
+    loss_mean = make_parallel(get_model, 
+                            available_gpu_num(), 
+                            images=images, 
+                            fids=fids, 
+                            pids=pids)
 
     # Some logging for tensorboard.
     tf.summary.histogram('loss_distribution', losses)
-    tf.summary.scalar('loss', loss_mean)
+    tf.summary.scalar('loss', tf.reduce_mean(loss_mean))
     tf.summary.scalar('batch_top1', train_top1)
     tf.summary.scalar('batch_prec_at_{}'.format(args.batch_k-1), prec_at_k)
     tf.summary.scalar('active_count', num_active)
@@ -364,7 +378,7 @@ def main():
 
     # Update_ops are used to update batchnorm stats.
     with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
-        train_op = optimizer.minimize(loss_mean, global_step=global_step)
+        train_op = optimizer.minimize(loss_mean, global_step=global_step, colocate_gradients_with_ops=True)
 
     # Define a saver for the complete model.
     checkpoint_saver = tf.train.Saver(max_to_keep=0)
@@ -414,6 +428,7 @@ def main():
                 summary_writer.add_summary(summary2, step)
                 summary_writer.add_summary(summary, step)
 
+                print('output shape | loss {} | embs {}'.format(b_loss.shape, b_embs.shape))
                 if args.detailed_logs:
                     log_embs[i], log_loss[i], log_fids[i] = b_embs, b_loss, b_fids
 
