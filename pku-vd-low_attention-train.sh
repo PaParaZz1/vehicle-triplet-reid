@@ -1,10 +1,5 @@
 #!/bin/sh
-#
-# This file calls train.py with all hyperparameters as for the TriNet
-# experiment on market1501 in the original paper.
-
-# Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=6
+export CUDA_VISIBLE_DEVICES=4
 
 METRIC='euclidean'
 HEADS='fc1024'
@@ -15,16 +10,6 @@ EXPR_NAME='low-level_attention'
 INIT_CHECKPT=./pretrained_models/inception_v4.ckpt ; shift
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
-# if [ ${BACKBONE} == 'resnet_v2_50' ]; then
-#     INIT_CHECKPT=./experiments/pku-vd/pku-vd_resnet50_v2_results/checkpoint-360000 ; shift
-#     echo 'Finetune using resnet_v2_50 bachbone'
-# elif [ ${BACKBONE} == 'inception' ]; then
-#     INIT_CHECKPT=./experiments/pku-vd/ckpt_inception_v4/checkpoint-285886 ; shift
-#     echo 'Finetune using inception_v4 backbone'
-# else
-#     echo 'Wrong Backbone Networks name'
-#     exit 9
-# fi
 
 PROCESSOR='train.py'
 LEARNING_RATE=1e-4
@@ -55,5 +40,5 @@ python ${PROCESSOR} \
     --lr_decay_factor 0.96 \
     --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
+    --resume \
     "$@"
-    # --resume \

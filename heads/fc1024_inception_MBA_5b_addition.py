@@ -39,7 +39,7 @@ def head(endpoints, embedding_dim, is_training):
                 for j in range(i + 1, head_num):
                     cosine_similarity(masks[i], masks[j], 'constraint_{}{}'.format(i, j))
 
-    _masked = tf.concat(masked_maps, axis=3, name='concated_mask')
+    _masked = tf.add_n(masked_maps, name='added_mask')
     endpoints['masked'] = _masked
 
     endpoints['model_output'] = endpoints['global_pool'] = tf.reduce_mean(

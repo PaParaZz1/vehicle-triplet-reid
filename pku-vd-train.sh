@@ -4,22 +4,21 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=2
+export CUDA_VISIBLE_DEVICES=3
 
 METRIC='euclidean'
-HEADS='fc1024_residual_attention'
+HEADS='fc1024_mixed_attention'
 BACKBONE='resnet_v2_50'
-EXPR_NAME='_0'
+EXPR_NAME='_wo_pretrain'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
-INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
+# INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
 
 python train.py \
     --train_set data/pku-vd/VD1_train.csv \
     --model_name ${BACKBONE} \
     --image_root $IMAGE_ROOT \
-    --initial_checkpoint $INIT_CHECKPT \
     --experiment_root $EXP_ROOT \
     --flip_augment \
     --crop_augment \
@@ -41,3 +40,4 @@ python train.py \
     --weight_decay_factor 0.0002 \
     "$@"
     # --resume \
+    # --initial_checkpoint $INIT_CHECKPT \

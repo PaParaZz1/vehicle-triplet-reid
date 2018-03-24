@@ -7,13 +7,12 @@
 export CUDA_VISIBLE_DEVICES=5
 
 METRIC='euclidean'
-HEADS='fc1024_inception_multi-resolution_spatial_attention'
+HEADS='fc1024_inception_multi-head_residual_attention'
 BACKBONE='inception'
-EXPR_NAME='_finetune_0'
+EXPR_NAME='_0'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
-# INIT_CHECKPT=./pretrained_models/inception_v4.ckpt ; shift
-INIT_CHECKPT=./experiments/pku-vd/ckpt_inception_v4/checkpoint-285886 ; shift
+INIT_CHECKPT=./pretrained_models/inception_v4.ckpt ; shift
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
 
 python train.py \
@@ -34,7 +33,7 @@ python train.py \
     --metric ${METRIC} \
     --loss batch_hard \
     --head_name ${HEADS} \
-    --learning_rate 1e-5 \
+    --learning_rate 1e-4 \
     --train_iterations 400000 \
     --decay_start_iteration 10000 \
     --lr_decay_factor 0.96 \

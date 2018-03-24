@@ -203,8 +203,9 @@ def main():
     with tf.name_scope('head'):
         endpoints = head.head(endpoints, args.embedding_dim, is_training=False)
         attention_masks = []
-        for bi in range(5):
-            attention_masks.append(endpoints['attention_mask{}'.format(bi)])
+        for bi in endpoints.keys():
+            if 'attention_mask' in bi:
+                attention_masks.append(endpoints[bi])
 
     with h5py.File(args.filename, 'w') as f_out, tf.Session(config=config) as sess:
         # Initialize the network/load the checkpoint.
@@ -221,7 +222,7 @@ def main():
             (len(data_fids) * len(modifiers), args.embedding_dim), np.float32)
         for start_idx in count(step=args.batch_size):
             try:
-                emb, _attmaps1, _attmaps2, _attmaps3, _attmaps4, _attmaps5, _images, _fids, _pids = sess.run([endpoints['emb'], *attention_masks, images, fids, pids])
+                emb, _attmaps, _images, _fids, _pids = sess.run([endpoints['emb'], attention_masks, images, fids, pids])
                 print('\rEmbedded batch {}-{}/{}'.format(
                         start_idx, start_idx + len(emb), len(emb_storage)), 
                     flush=True, end='')
@@ -231,7 +232,6 @@ def main():
                 # print(np.array(_fids).shape)
                 _fids = [x.decode().split('/')[-1].split('.')[0] for x in _fids]
                 _pids = [x.decode() for x in _pids]
-                _attmaps = [_attmaps1, _attmaps2, _attmaps3, _attmaps4, _attmaps5]
                 for batch_idx in range(len(_attmaps[0])):
                     print('process image {}:{}'.format(_pids[batch_idx], _fids[batch_idx]))
                     cv2.imwrite(os.path.join('attention_maps', '{}_{}_origin.jpg'.format(_pids[batch_idx], _fids[batch_idx])), _images[batch_idx].astype(np.uint8))
