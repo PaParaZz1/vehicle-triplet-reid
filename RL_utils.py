@@ -15,7 +15,7 @@ import os, sys
 import numpy as np
 import tensorflow as tf
 from tensorflow.contrib import slim
-from utils import show_stats
+from utils import show_stats, available_gpu_num, get_available_gpus, make_parallel
 
 # reproducible
 np.random.seed(1)
@@ -82,31 +82,30 @@ class PolicyGradient:
                         self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="rl_observations")
                         self.tf_acts = tf.placeholder(tf.float32, [None, self.n_features], name="rl_actions_num")
                         self.tf_vt = tf.placeholder(tf.float32, [None, ], name="rl_actions_value")
-                        dense = slim.fully_connected(self.tf_obs, self.rl_hidden_units[0], scope='rl_dense1')
-                        for dense_idx in range(1, len(self.rl_hidden_units)):
-                            dense = slim.fully_connected(dense, self.rl_hidden_units[dense_idx], scope='rl_dense{}'.format(dense_idx + 1))
-                        # dense2 = slim.fully_connected(dense, self.n_actions, scope='rl_dense{}'.format(len(self.rl_hidden_units)+1), activation_fn=None)
-                        dense2 = slim.fully_connected(dense, self.n_actions, scope='rl_dense{}'.format(len(self.rl_hidden_units)+1))
+                        def get_model(observation, action, reward):
+                            dense = slim.fully_connected(observation, self.rl_hidden_units[0], scope='rl_dense1')
+                            for dense_idx in range(1, len(self.rl_hidden_units)):
+                                dense = slim.fully_connected(dense, self.rl_hidden_units[dense_idx], scope='rl_dense{}'.format(dense_idx + 1))
+                            dense2 = slim.fully_connected(dense, self.n_actions, scope='rl_dense{}'.format(len(self.rl_hidden_units)+1), activation_fn=None)
 
-                        if self.rl_activation == 'softmax':
-                            self.all_act_prob = tf.nn.softmax(dense2, name='rl_act_prob')  # use softmax to convert to probability
-                        elif self.rl_activation == 'norm_sigmoid' or self.rl_activation == 'sigmoid':
-                            self.all_act_prob = tf.sigmoid(dense2, name='rl_act_prob')
-                        elif self.rl_activation == 'tanh':
-                            self.all_act_prob = tf.tanh(dense2, name='rl_act_prob')
-                        elif self.rl_activation == 'linear':
-                            self.all_act_prob = dense2
-                        # self.all_act_prob = self.all_act_prob * 0.98 + 0.01
+                            if self.rl_activation == 'softmax':
+                                self.all_act_prob = tf.nn.softmax(dense2, name='rl_act_prob')  # use softmax to convert to probability
+                            elif self.rl_activation == 'norm_sigmoid' or self.rl_activation == 'sigmoid':
+                                self.all_act_prob = tf.sigmoid(dense2, name='rl_act_prob')
+                            elif self.rl_activation == 'tanh':
+                                self.all_act_prob = tf.tanh(dense2, name='rl_act_prob')
+                            elif self.rl_activation == 'linear':
+                                self.all_act_prob = dense2
+                            if self.is_train:
+                                self.all_act_prob = self.all_act_prob * 0.98 + 0.01
 
-            with tf.name_scope('loss'):
-                # to maximize total reward (log_p * R) is to minimize -(log_p * R), and the tf only have minimize(loss)
-                # neg_log_prob = tf.nn.softmax_cross_entropy_with_logits(logits=dense2, labels=self.tf_acts)   # this is negative log of chosen action
-                # or in this way:
-                # neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob) * self.tf_acts \
-                #         + tf.log(1 - self.all_act_prob) * (1 - self.tf_acts), axis=1)
-                neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob * self.tf_acts + \
-                        (1 - self.all_act_prob) * (1 - self.tf_acts)), axis=1)
-                self.loss = tf.reduce_mean(neg_log_prob * self.tf_vt)  # reward guided loss
+                            with tf.name_scope('loss'):
+                                # to maximize total reward (log_p * R) is to minimize -(log_p * R), and the tf only have minimize(loss)
+                                neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob * action + \
+                                    (1 - self.all_act_prob) * (1 - action)), axis=1)
+                                return tf.reduce_mean(neg_log_prob * reward, keep_dims=True)  # reward guided loss
+                        
+                        self.loss = make_parallel(get_model, available_gpu_num(), observation=self.tf_obs, action=self.tf_acts, reward=self.tf_vt)
 
             with tf.name_scope('train'):
                 self.global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -114,7 +113,7 @@ class PolicyGradient:
                         self.lr,
                         tf.maximum(0, self.global_step - self.decay_start_iteration),
                         self.lr_decay_steps, self.lr_decay_factor, staircase=True)
-                self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss, global_step=self.global_step)
+                self.train_op = tf.train.AdamOptimizer(self.learning_rate).minimize(self.loss, global_step=self.global_step, colocate_gradients_with_ops=True)
             self.init_rl = tf.global_variables_initializer()
             self.saver_rl = tf.train.Saver(max_to_keep=0)
 
@@ -123,12 +122,10 @@ class PolicyGradient:
         if self.rl_activation == 'norm_sigmoid':
             prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
         if self.is_train:
-            prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-8) * 0.98 + 0.01 for x in prob_weights]
             action = []
             for batch in prob_weights:
                 action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
         else:
-            prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-8) for x in prob_weights]
             action = np.around(prob_weights)
         return action
 

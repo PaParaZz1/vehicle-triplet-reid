@@ -22,10 +22,12 @@ import loss
 from nets import NET_CHOICES
 from heads import HEAD_CHOICES
 from RL_utils import TripletStorage, PolicyGradient
-from utils import show_stats
+from utils import show_stats, available_gpu_num, get_available_gpus, make_parallel
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
+config.log_device_placement = True
+config.allow_soft_placement = True
 
 parser = ArgumentParser(description='Train a ReID network.')
 
@@ -222,7 +224,6 @@ def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
 
 def dist(a, b): return np.sqrt(np.sum(np.square(a-b), axis=1) + 1e-12)
 
-
 def main():
     args = parser.parse_args()
 
@@ -370,20 +371,26 @@ def main():
         # Feed the image through the model. The returned `body_prefix` will be used
         # further down to load the pre-trained weights for all variables with this
         # prefix.
-        endpoints, body_prefix = model.endpoints(images, is_training=True)
-        with tf.name_scope('head'):
-            endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
+        def get_models(images, fids, pids):
+            global body_prefix, endpoints
+            global losses, train_top1, prec_at_k, num_active
+            global dists, neg_dists, pos_dists, pos_indices, neg_indices
+            endpoints, body_prefix = model.endpoints(images, is_training=True)
+            with tf.name_scope('head'):
+                endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
         
-        # Create the loss in two steps:
-        # 1. Compute all pairwise distances according to the specified metric.
-        # 2. For each anchor along the first dimension, compute its loss.
-        dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
-        losses, train_top1, prec_at_k, _, neg_dists, pos_dists, pos_indices, neg_indices = loss.LOSS_CHOICES[args.loss](
-            dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
+            # Create the loss in two steps:
+            # 1. Compute all pairwise distances according to the specified metric.
+            # 2. For each anchor along the first dimension, compute its loss.
+            dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
+            losses, train_top1, prec_at_k, _, neg_dists, pos_dists, pos_indices, neg_indices = loss.LOSS_CHOICES[args.loss](
+                dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
         
-        # Count the number of active entries, and compute the total batch loss.
-        num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
-        loss_mean = tf.reduce_mean(losses)
+            # Count the number of active entries, and compute the total batch loss.
+            num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
+            return tf.reduce_mean(losses, keep_dims=True)
+
+        loss_mean = make_parallel(get_models, available_gpu_num(), images=images, fids=fids, pids=pids)
 
         # These are collected here before we add the optimizer, because depending
         # on the optimizer, it might add extra slots, which are also global
@@ -513,9 +520,28 @@ def main():
                 # start to do reinforcement learning
                 rl_actions = Agent.choose_action(b_ftrs_batch)
 
-                cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs_batch * rl_actions})
-                pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs_batch * rl_actions})
-                neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs_batch * rl_actions})
+                # cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs_batch * rl_actions})
+                # pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs_batch * rl_actions})
+                # neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs_batch * rl_actions})
+                def embedding(ftrs, acts):
+                    print('ftr {}'.format(np.array(ftrs).shape))
+                    print('act {}'.format(np.array(acts).shape))
+                    slt_ftrs = ftrs * acts
+                    gpu_num = available_gpu_num()
+                    split_ftrs = np.split(slt_ftrs, gpu_num)
+                    
+                    split_embs = []
+                    for gpu_idx in range(gpu_num):
+                        with tf.device(tf.DeviceSpec(device_type="GPU", device_index=i)):
+                            with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+                                embs = sess_sup.run(endpoints['emb'], 
+                                        feed_dict={endpoints['model_output']:split_ftrs[gpu_idx]})
+                                split_embs.append(embs)
+                    return np.concatenate(split_embs, axis=0)
+                cur_embs = embedding(b_ftrs_batch, rl_actions)
+                pos_embs = embedding(pos_ftrs_batch, rl_actions)
+                neg_embs = embedding(neg_ftrs_batch, rl_actions)
+
                 # cur_loss = np.log(1 + np.exp(dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)))
                 cur_loss = np.log(1 + np.exp(dist(cur_embs, pos_embs) - dist(cur_embs, neg_embs)))
                 # rl_rewards = cur_loss - b_loss_batch
