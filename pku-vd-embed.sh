@@ -1,12 +1,12 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=6
+export CUDA_VISIBLE_DEVICES=5
 source venv/bin/activate
 
-epoch=160000
+epoch=70000
 dataset_size=''
-# expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_multi_embs_inception_finetune_0'
-expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_inception_finetune_0'
+# expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_inception_1.0_1_finetune_0'
+expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_linear_inception_1.0_1_finetune_0'
 
 python embed.py \
         --experiment_root ./experiments/pku-vd/${expr_dir} \

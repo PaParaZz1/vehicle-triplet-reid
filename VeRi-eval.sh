@@ -1,17 +1,17 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=0
-
-ITER=370000
-EXPR_ROOT='./experiments/pku-vd/expr_attention_euclidean_fc1024_inception_multi-residual-head_attention_5_branch_inception_10.0_finetune_0'
+export CUDA_VISIBLE_DEVICES=1
+source venv/bin/activate
+expr_dir='expr_attention_euclidean_fc1024_inception_scratch'
+epoch=20000
 
 python ./evaluate.py \
-    --excluder diagonal\
+    --excluder veri\
     --query_dataset ./data/VeRi/VeRi_query.csv \
-    --query_embeddings ${EXPR_ROOT}/VeRi_query_${ITER}_embeddings.h5 \
+    --query_embeddings ./experiments/VeRi/${expr_dir}/VeRi_query_${epoch}_embeddings.h5 \
     --gallery_dataset ./data/VeRi/VeRi_test.csv \
-    --gallery_embeddings ${EXPR_ROOT}/VeRi_test_${ITER}_embeddings.h5 \
+    --gallery_embeddings ./experiments/VeRi/${expr_dir}/VeRi_test_${epoch}_embeddings.h5 \
     --metric euclidean\
-    --filename ${EXPR_ROOT}/VeRi_${ITER}_evaluation.json \
+    --filename ./experiments/VeRi/${expr_dir}/VeRi_${epoch}_evaluation.json \
     --batch_size 64\
     

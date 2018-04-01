@@ -17,6 +17,8 @@ HEAD_CHOICES = (
     'fc1024_inception_multi-head_residual_attention',
     'fc1024_inception_MBA_5b_addition',
     'fc1024_inception_MBA_5b_multi_embs',
+    'fc1024_inception_MBA_5b_addition_linear',
+    'fc1024_inception_MBA_5b_addition_single_residual',
     'fc1024_inception_multi-residual-head_attention',
     'fc1024_inception_multi-residual-head_attention_kl',
     'fc1024_inception_multi-residual-head_attention_5_branch',

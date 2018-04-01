@@ -7,25 +7,6 @@ feature_size = 5
 
 def head(endpoints, embedding_dim, is_training):
 
-    def embedding(_input, name, reuse):
-        endpoints['model_output{}'.format(name)] = endpoints['global_pool{}'.format(name)] = tf.reduce_mean(
-            _input, [1, 2], keep_dims=False)
-
-        endpoints['head_output{}'.format(name)] = slim.fully_connected(
-            endpoints['model_output{}'.format(name)], 1024, normalizer_fn=slim.batch_norm,
-            normalizer_params={
-                'decay': 0.9,
-                'epsilon': 1e-5,
-                'scale': True,
-                'is_training': is_training,
-                'updates_collections': tf.GraphKeys.UPDATE_OPS,
-            }, reuse=reuse, scope='output')
-
-        embs = endpoints['emb{}'.format(name)] = endpoints['emb_raw{}'.format(name)] = slim.fully_connected(
-            endpoints['head_output{}'.format(name)], embedding_dim, activation_fn=None,
-            weights_initializer=tf.orthogonal_initializer(), reuse=reuse, scope='embedding')
-        return embs
-
     batch_norm_params = {
             'decay': 0.9,
             'epsilon': 1e-5,
@@ -44,28 +25,44 @@ def head(endpoints, embedding_dim, is_training):
             # attention_projection = slim.conv2d(endpoints['Mixed_7d'], 512, [1, 1], scope='attention_projection')
             masks = []
             masked_maps = []
-            embs = []
             for i in range(head_num):
                 attention_branch_mask = attention_branch(endpoints['Mixed_7d'], i)
                 # attention_branch_mask = attention_branch(attention_projection, i)
                 masks.append(attention_branch_mask)
                 endpoints['attention_mask{}'.format(i)] = attention_branch_mask
-                masked_map = (1 + attention_branch_mask) * endpoints['Mixed_7d']
+                if i == 0:
+                    masked_map = (1 + attention_branch_mask) * endpoints['Mixed_7d']
+                else:
+                    masked_map = attention_branch_mask * endpoints['Mixed_7d']
                 # masked_map = (1 + attention_branch_mask) * attention_projection
                 endpoints['attention_map{}'.format(i)] = masked_map
                 masked_maps.append(masked_map)
-                if i == 0:
-                    embs.append(embedding(masked_map, i, reuse=False))
-                else:
-                    embs.append(embedding(masked_map, i, reuse=True))
 
             for i in range(head_num):
                 for j in range(i + 1, head_num):
                     cosine_similarity(masks[i], masks[j], 'constraint_{}{}'.format(i, j))
 
-    endpoints['emb'] = endpoints['emb_raw'] = tf.add_n(embs, name='embs')
-    return endpoints
+    _masked = tf.add_n(masked_maps, name='added_mask')
+    endpoints['masked'] = _masked
 
+    endpoints['model_output'] = endpoints['global_pool'] = tf.reduce_mean(
+            _masked, [1, 2], name='_pool5', keep_dims=False)
+
+    endpoints['head_output'] = slim.fully_connected(
+        endpoints['model_output'], 1024, normalizer_fn=slim.batch_norm,
+        normalizer_params={
+            'decay': 0.9,
+            'epsilon': 1e-5,
+            'scale': True,
+            'is_training': is_training,
+            'updates_collections': tf.GraphKeys.UPDATE_OPS,
+        })
+
+    endpoints['emb'] = endpoints['emb_raw'] = slim.fully_connected(
+        endpoints['head_output'], embedding_dim, activation_fn=None,
+        weights_initializer=tf.orthogonal_initializer(), scope='emb')
+
+    return endpoints
 
 def attention_branch(_input, name):
     attention_branch_conv1 = slim.conv2d(_input, 64, [1, 1], scope='attention_branch{}_conv1'.format(name))

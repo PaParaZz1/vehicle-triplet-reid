@@ -203,9 +203,8 @@ def main():
     with tf.name_scope('head'):
         endpoints = head.head(endpoints, args.embedding_dim, is_training=False)
         attention_masks = []
-        for bi in endpoints.keys():
-            if 'attention_mask' in bi:
-                attention_masks.append(endpoints[bi])
+        for b_idx in range(5):
+            attention_masks.append(endpoints['attention_mask{}'.format(b_idx)])
 
     with h5py.File(args.filename, 'w') as f_out, tf.Session(config=config) as sess:
         # Initialize the network/load the checkpoint.
