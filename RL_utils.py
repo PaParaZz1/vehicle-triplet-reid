@@ -80,12 +80,13 @@ class PolicyGradient:
                 with slim.arg_scope([slim.batch_norm], **batch_norm_params):
                     with tf.name_scope('inputs'):
                         self.tf_obs = tf.placeholder(tf.float32, [None, self.n_features], name="rl_observations")
-                        self.tf_acts = tf.placeholder(tf.float32, [None, self.n_features], name="rl_actions_num")
+                        self.tf_acts = tf.placeholder(tf.float32, [None, self.n_actions], name="rl_actions_num")
                         self.tf_vt = tf.placeholder(tf.float32, [None, ], name="rl_actions_value")
-                        dense = slim.fully_connected(self.tf_obs, self.rl_hidden_units[0], scope='rl_dense1')
+                        dense = slim.fully_connected(self.tf_obs, self.rl_hidden_units[0], scope='rl_dense1', activation_fn=tf.nn.relu)
                         for dense_idx in range(1, len(self.rl_hidden_units)):
-                            dense = slim.fully_connected(dense, self.rl_hidden_units[dense_idx], scope='rl_dense{}'.format(dense_idx + 1))
-                        dense2 = slim.fully_connected(dense, self.n_actions, scope='rl_dense{}'.format(len(self.rl_hidden_units)+1), activation_fn=None)
+                            dense = slim.fully_connected(dense, self.rl_hidden_units[dense_idx], scope='rl_dense{}'.format(dense_idx + 1), activation_fn=tf.nn.relu)
+                        # dense2 = slim.fully_connected(dense, self.n_actions, scope='rl_dense{}'.format(len(self.rl_hidden_units)+1), activation_fn=None)
+                        dense2 = slim.fully_connected(dense, self.n_actions, scope='rl_dense{}'.format(len(self.rl_hidden_units)+1), activation_fn=None, weights_initializer=tf.zeros_initializer)
                         # dense2 = slim.fully_connected(dense, self.n_actions, scope='rl_dense{}'.format(len(self.rl_hidden_units)+1))
 
                         if self.rl_activation == 'softmax':
@@ -103,8 +104,6 @@ class PolicyGradient:
                 # to maximize total reward (log_p * R) is to minimize -(log_p * R), and the tf only have minimize(loss)
                 # neg_log_prob = tf.nn.softmax_cross_entropy_with_logits(logits=dense2, labels=self.tf_acts)   # this is negative log of chosen action
                 # or in this way:
-                # neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob) * self.tf_acts \
-                #         + tf.log(1 - self.all_act_prob) * (1 - self.tf_acts), axis=1)
                 neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob * self.tf_acts + \
                         (1 - self.all_act_prob) * (1 - self.tf_acts)), axis=1)
                 # neg_log_prob = -tf.reduce_sum(tf.log(self.all_act_prob) * self.tf_acts, axis=1)
@@ -126,12 +125,19 @@ class PolicyGradient:
             prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-5) for x in prob_weights]
         if self.is_train:
             # prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-8) * 0.98 + 0.01 for x in prob_weights]
+            # print('policy {}'.format(np.mean(prob_weights, 0)))
+            slt = prob_weights[0] > 0.5
+            print('policy {}'.format(prob_weights[0][slt].argsort()))
             action = []
             for batch in prob_weights:
                 action.append([np.random.choice([0, 1], p=[x, 1-x]) for x in batch])
         else:
             # prob_weights = [(x - np.min(x)) / (np.max(x) - np.min(x) + 1e-8) for x in prob_weights]
             show_stats('policy', prob_weights)
+            # action = prob_weights
+            # action[prob_weights > 0.2] = 1
+            # action[prob_weights <= 0.2] = 0
+            
             action = np.around(prob_weights)
         return action
 

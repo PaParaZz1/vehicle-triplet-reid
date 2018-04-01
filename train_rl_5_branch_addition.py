@@ -200,6 +200,9 @@ parser.add_argument(
 parser.add_argument(
     '--rl_lr_decay_factor', default=0.9, type=common.positive_float)
 
+parser.add_argument(
+    '--rl_observation_norm', action='store_true', default=False)
+
 
 def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
     """ Given a PID, select K FIDs of that specific PID. """
@@ -269,8 +272,6 @@ def main():
         # and readable format.
         with open(args_file, 'w') as f:
             json.dump(vars(args), f, ensure_ascii=False, indent=2, sort_keys=True)
-
-
 
     log_file = os.path.join(args.experiment_root, "train")
     logging.config.dictConfig(common.get_logging_dict(log_file))
@@ -373,6 +374,7 @@ def main():
         endpoints, body_prefix = model.endpoints(images, is_training=True)
         with tf.name_scope('head'):
             endpoints = head.head(endpoints, args.embedding_dim, is_training=True)
+            atts = [endpoints['attention_map{}'.format(i)] for i in range(5)]
         
         # Create the loss in two steps:
         # 1. Compute all pairwise distances according to the specified metric.
@@ -423,7 +425,7 @@ def main():
             dtype='S' + str(max_fid_len), shape=(args.train_iterations, batch_size))
 
     # set params for reinforcement learning
-    ACTION_NUMS = 1536
+    ACTION_NUMS = 5
     EPSILON = args.rl_epsilon
     # create agent
     Agent = PolicyGradient(
@@ -490,47 +492,59 @@ def main():
             for step in range(start_step, args.train_iterations):
                 # Just forward to get triplets and images, no updates
                 start_time = time.time()
-                b_ftrs, b_embs, b_loss, b_fids, b_pids, \
+                b_obs, b_atts, b_loss, b_fids, b_pids, \
                 _pos_dist, _neg_dist, _pos_indices, _neg_indices = \
-                    sess_sup.run([endpoints['model_output'], endpoints['emb'], losses, fids, pids, \
+                    sess_sup.run([endpoints['Mixed_7d'], atts, losses, fids, pids, \
                     pos_dists, neg_dists, pos_indices, neg_indices], feed_dict={handle:train_handle})
-                pos_ftrs, neg_ftrs = copy.deepcopy(b_ftrs[_pos_indices]), copy.deepcopy(b_ftrs[_neg_indices])
+                b_atts = np.mean(b_atts, axis=(2, 3))
+                b_atts = np.transpose(np.array(b_atts), (1, 0, 2))
+                pos_ftrs, neg_ftrs = copy.deepcopy(b_atts[_pos_indices]), copy.deepcopy(b_atts[_neg_indices])
 
-                b_ftrs_batch = []
-                pos_ftrs_batch = []
-                neg_ftrs_batch = []
-                b_loss_batch = []
-                for sample_idx in range(args.rl_sample_num):
-                    b_ftrs_batch.append(b_ftrs)
-                    pos_ftrs_batch.append(pos_ftrs)
-                    neg_ftrs_batch.append(neg_ftrs)
-                    b_loss_batch.append(b_loss)
-                b_ftrs_batch = np.concatenate(b_ftrs_batch)
-                pos_ftrs_batch = np.concatenate(pos_ftrs_batch)
-                neg_ftrs_batch = np.concatenate(neg_ftrs_batch)
-                b_loss_batch = np.concatenate(b_loss_batch)
+                b_ftrs_batch = np.repeat(b_atts, repeats=args.rl_sample_num, axis=0)
+                pos_ftrs_batch = np.repeat(pos_ftrs, repeats=args.rl_sample_num, axis=0)
+                neg_ftrs_batch = np.repeat(neg_ftrs, repeats=args.rl_sample_num, axis=0)
+                b_loss_batch = np.repeat(b_loss, repeats=args.rl_sample_num, axis=0)
 
+                b_obs_batch = np.repeat(np.mean(b_obs, axis=(1, 2)), 
+                                        repeats=args.rl_sample_num, 
+                                        axis=0)
+                if args.rl_observation_norm:
+                    b_obs_batch = (b_obs_batch - np.mean(b_obs_batch)) / np.std(b_obs_batch)
                 # start to do reinforcement learning
-                rl_actions = Agent.choose_action(b_ftrs_batch)
+                rl_actions = Agent.choose_action(b_obs_batch)
 
-                cur_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:b_ftrs_batch * rl_actions})
-                pos_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:pos_ftrs_batch * rl_actions})
-                neg_embs = sess_sup.run(endpoints['emb'], feed_dict={endpoints['model_output']:neg_ftrs_batch * rl_actions})
+                '''
+                cur_embs = sess_sup.run(endpoints['emb'], 
+                        feed_dict={endpoints['model_output']:np.sum(b_ftrs_batch * np.expand_dims(rl_actions, axis=2), axis=1)})
+                pos_embs = sess_sup.run(endpoints['emb'], 
+                        feed_dict={endpoints['model_output']:np.sum(pos_ftrs_batch * np.expand_dims(rl_actions, axis=2), axis=1)})
+                neg_embs = sess_sup.run(endpoints['emb'], 
+                        feed_dict={endpoints['model_output']:np.sum(neg_ftrs_batch * np.expand_dims(rl_actions, axis=2), axis=1)})
+                '''
+
+                cur_embs = sess_sup.run(endpoints['emb'], 
+                        feed_dict={endpoints['model_output']:np.sum(b_ftrs_batch * (1 + np.expand_dims(rl_actions, axis=2)), axis=1)})
+                pos_embs = sess_sup.run(endpoints['emb'], 
+                        feed_dict={endpoints['model_output']:np.sum(pos_ftrs_batch * (1 + np.expand_dims(rl_actions, axis=2)), axis=1)})
+                neg_embs = sess_sup.run(endpoints['emb'], 
+                        feed_dict={endpoints['model_output']:np.sum(neg_ftrs_batch * (1 + np.expand_dims(rl_actions, axis=2)), axis=1)})
+
                 # cur_loss = np.log(1 + np.exp(dist(cur_embs, neg_embs) - dist(cur_embs, pos_embs)))
                 cur_loss = np.log(1 + np.exp(dist(cur_embs, pos_embs) - dist(cur_embs, neg_embs)))
                 # rl_rewards = cur_loss - b_loss_batch
-                rl_rewards = b_loss_batch - cur_loss
+                REWARD_SCORE = 1
+                rl_rewards = (b_loss_batch - cur_loss) * REWARD_SCORE
                 show_stats('reward', rl_rewards)
+                print('cur loss {:.2e} | pos loss {:.2e}| reward {:.2e}'.format(cur_loss[0], b_loss_batch[0], rl_rewards[0]))
                 
                 # normalize reward
                 if args.rl_baseline == 'mean':
                     rl_rewards -= np.maximum(np.mean(rl_rewards, axis=0), 0)
-
                 elif args.rl_baseline == 'mean-std':
                     rl_rewards -= np.mean(rl_rewards, axis=0)
                     rl_rewards /= np.std(rl_rewards, axis=0)
 
-                Agent.store_transition(b_ftrs_batch, rl_actions, rl_rewards)
+                Agent.store_transition(b_obs_batch, rl_actions, rl_rewards)
                 rl_losses, rl_lr = Agent.learn()
 
                 # step = sess_rl.run(Agent.global_step)

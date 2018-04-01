@@ -59,6 +59,40 @@ cdist.supported_metrics = [
     'cityblock',
 ]
 
+def inst_dist(a, b, metric='euclidean'):
+    """Similar to scipy.spatial's cdist, but symbolic.
+
+    The currently supported metrics can be listed as `cdist.supported_metrics` and are:
+        - 'euclidean', although with a fudge-factor epsilon.
+        - 'sqeuclidean', the squared euclidean.
+        - 'cityblock', the manhattan or L1 distance.
+
+    Args:
+        a (2D tensor): The query embeddings, shaped (B, F).
+        b (2D tensor): The gallery embeddings, shaped (B, gallery_size, F).
+        metric (string): Which distance metric to use, see notes.
+
+    Returns:
+        The matrix of all pairwise distances between all vectors in `a` and in
+        `b`, will be of shape (B1, B2).
+
+    Note:
+        When a square root is taken (such as in the Euclidean case), a small
+        epsilon is added because the gradient of the square-root at zero is
+        undefined. Thus, it will never return exact zero in these cases.
+    """
+    with tf.name_scope("cdist"):
+        # diffs = all_diffs(a, b)
+        diffs = tf.expand_dims(a, 1) - b
+        if metric == 'sqeuclidean':
+            return tf.reduce_sum(tf.square(diffs), axis=-1)
+        elif metric == 'euclidean':
+            return tf.sqrt(tf.reduce_sum(tf.square(diffs), axis=-1) + 1e-12)
+        elif metric == 'cityblock':
+            return tf.reduce_sum(tf.abs(diffs), axis=-1)
+        else:
+            raise NotImplementedError(
+                'The following metric is not implemented by `cdist` yet: {}'.format(metric))
 
 def get_at_indices(tensor, indices):
     """ Like `tensor[np.arange(len(tensor)), indices]` in numpy. """
