@@ -98,6 +98,9 @@ def five_crops(image, crop_size):
     bottom_right = image[crop_margin[0]:, crop_margin[1]:]
     return center, top_left, top_right, bottom_left, bottom_right
 
+def im_norm(im):
+    return (im - np.min(im)) / (np.max(im) - np.min(im))
+
 
 def main():
     # Verify that parameters are set correctly.
@@ -232,22 +235,21 @@ def main():
                 _fids = [x.decode().split('/')[-1].split('.')[0] for x in _fids]
                 _pids = [x.decode() for x in _pids]
                 for batch_idx in range(len(_attmaps[0])):
-                    print('process image {}:{}'.format(_pids[batch_idx], _fids[batch_idx]))
-                    cv2.imwrite(os.path.join('attention_maps', '{}_{}_origin.jpg'.format(_pids[batch_idx], _fids[batch_idx])), _images[batch_idx].astype(np.uint8))
+                    print('process image {}'.format(_fids[batch_idx]))
+                    cv2.imwrite(os.path.join('attention_maps', '{}_origin.jpg'.format(_fids[batch_idx])), _images[batch_idx].astype(np.uint8))
                     for att_idx in range(len(_attmaps)):
-                        normed_map = (_attmaps[att_idx][batch_idx] - np.min(_attmaps[att_idx][batch_idx])) / (np.max(_attmaps[att_idx][batch_idx]) - np.min(_attmaps[att_idx][batch_idx]))
-                        _enlarged = cv2.resize(_attmaps[att_idx][batch_idx], (224, 224), interpolation=cv2.INTER_CUBIC)
-                        norm_enlarged = cv2.resize(normed_map, (224, 224), interpolation=cv2.INTER_CUBIC)
-                        _enlarged = np.expand_dims(_enlarged, 2)
-                        norm_enlarged = np.expand_dims(norm_enlarged, 2)
-                        _masked = _enlarged * _images[batch_idx]
+                        normed_map = im_norm(_attmaps[att_idx][batch_idx])
+                        # _enlarged = np.expand_dims(cv2.resize(_attmaps[att_idx][batch_idx], (224, 224), interpolation=cv2.INTER_CUBIC), 2)
+                        norm_enlarged = im_norm(np.expand_dims(cv2.resize(normed_map, (224, 224), interpolation=cv2.INTER_CUBIC), 2))
+                        tmp_enlarged = norm_enlarged * 255
+                        pseudo_enlarged = cv2.applyColorMap(tmp_enlarged.astype(np.uint8), cv2.COLORMAP_JET)
                         norm_masked = norm_enlarged * _images[batch_idx]
-                        _masked.astype(np.uint8)
-                        norm_masked.astype(np.uint8)
-                        _enlarged = _enlarged * 255
-                        # cv2.imwrite(os.path.join('attention_maps', '{}_{}_masked_branch_{}.jpg'.format(_pids[batch_idx], _fids[batch_idx], att_idx)), _masked)
-                        cv2.imwrite(os.path.join('attention_maps', '{}_{}_norm_masked_branch_{}.jpg'.format(_pids[batch_idx], _fids[batch_idx], att_idx)), norm_masked)
-                        # cv2.imwrite(os.path.join('attention_maps', '{}_{}_mask_branch_{}.jpg'.format(_pids[batch_idx], _fids[batch_idx], att_idx)), _enlarged.astype(np.uint8))
+                        pseudo_masked = pseudo_enlarged * 0.5 + _images[batch_idx] * 0.5
+                        norm_enlarged = norm_enlarged * 255
+                        cv2.imwrite(os.path.join('attention_maps', '{}_norm_masked_b{}.jpg'.format(_fids[batch_idx], att_idx)), norm_masked.astype(np.uint8))
+                        cv2.imwrite(os.path.join('attention_maps', '{}_pseudo_masked_b{}.jpg'.format(_fids[batch_idx], att_idx)), pseudo_masked.astype(np.uint8))
+                        cv2.imwrite(os.path.join('attention_maps', '{}_gray_mask_b{}.jpg'.format(_fids[batch_idx], att_idx)), norm_enlarged.astype(np.uint8))
+                        cv2.imwrite(os.path.join('attention_maps', '{}_pseudo_mask_b{}.jpg'.format(_fids[batch_idx], att_idx)), pseudo_enlarged.astype(np.uint8))
 
             except tf.errors.OutOfRangeError:
                 break  # This just indicates the end of the dataset.

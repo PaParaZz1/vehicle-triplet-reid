@@ -363,8 +363,9 @@ def main():
         # 1. Compute all pairwise distances according to the specified metric.
         # 2. For each anchor along the first dimension, compute its loss.
         dists = loss.cdist(endpoints['emb'], endpoints['emb'], metric=args.metric)
+        dists_origin = loss.cdist(endpoints['emb_joint'], endpoints['emb_joint'], metric=args.metric)
         losses, train_top1, prec_at_k, _, neg_dists, pos_dists = loss.LOSS_CHOICES[args.loss](
-            dists, pids, args.margin, batch_precision_at_k=args.batch_k-1)
+            dists, dists_origin, pids, args.margin, batch_precision_at_k=args.batch_k-1)
         
         # Count the number of active entries, and compute the total batch loss.
         num_active = tf.reduce_sum(tf.cast(tf.greater(losses, 1e-5), tf.float32))
@@ -408,6 +409,8 @@ def main():
     # variables, with the exact same prefix.
     model_variables = tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES, body_prefix)
 
+    print('variables {}'.format(tf.global_variables()))
+
     # Define the optimizer and the learning-rate schedule.
     # Unfortunately, we get NaNs if we don't handle no-decay separately.
     global_step = tf.Variable(0, name='global_step', trainable=False)
@@ -431,8 +434,8 @@ def main():
     with tf.control_dependencies(tf.get_collection(tf.GraphKeys.UPDATE_OPS)):
         train_op = optimizer.minimize(loss_mean, 
                                     global_step=global_step, 
-                                    colocate_gradients_with_ops=True)
-    #                                 var_list=trainable_variables)
+                                    colocate_gradients_with_ops=True,
+                                    var_list=trainable_variables)
 
     # Define a saver for the complete model.
     checkpoint_saver = tf.train.Saver(max_to_keep=0)

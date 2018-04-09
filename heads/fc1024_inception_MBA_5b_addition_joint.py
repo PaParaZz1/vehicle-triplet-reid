@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.contrib import slim
 
 head_num = 5
-CONSTRAINT_WEIGHT = 10.0
+CONSTRAINT_WEIGHT = 1.0
 feature_size = 5
 
 def head(endpoints, embedding_dim, is_training):
@@ -53,11 +53,25 @@ def head(endpoints, embedding_dim, is_training):
             'scale': True,
             'is_training': is_training,
             'updates_collections': tf.GraphKeys.UPDATE_OPS,
-        })
+        }, scope='pre_emb')
 
     endpoints['emb'] = endpoints['emb_raw'] = slim.fully_connected(
         endpoints['head_output'], embedding_dim, activation_fn=None,
         weights_initializer=tf.orthogonal_initializer(), scope='emb')
+
+    ftrs =  tf.reduce_mean(endpoints['Mixed_7d'], [1, 2], name='_pool5_joint', keep_dims=False)
+
+    pre_emb  = slim.fully_connected(ftrs, 1024, normalizer_fn=slim.batch_norm,
+        normalizer_params={
+            'decay': 0.9,
+            'epsilon': 1e-5,
+            'scale': True,
+            'is_training': is_training,
+            'updates_collections': tf.GraphKeys.UPDATE_OPS,
+        }, reuse=True, scope='pre_emb')
+
+    endpoints['emb_joint'] = slim.fully_connected(pre_emb, embedding_dim, activation_fn=None,
+        weights_initializer=tf.orthogonal_initializer(), scope='emb', reuse=True)
 
     return endpoints
 

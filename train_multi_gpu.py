@@ -357,6 +357,7 @@ def main():
     # variables, with the exact same prefix.
     model_variables = tf.get_collection(
         tf.GraphKeys.GLOBAL_VARIABLES, body_prefix)
+    print('variables  {}'.format(tf.global_variables()))
 
     # Define the optimizer and the learning-rate schedule.
     # Unfortunately, we get NaNs if we don't handle no-decay separately.

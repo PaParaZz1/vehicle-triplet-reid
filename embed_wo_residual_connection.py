@@ -2,7 +2,7 @@
 from argparse import ArgumentParser
 from importlib import import_module
 from itertools import count
-import os, sys
+import os
 
 import h5py
 import json
@@ -11,7 +11,6 @@ import tensorflow as tf
 
 from aggregators import AGGREGATORS
 import common
-import cv2
 
 parser = ArgumentParser(description='Embed a dataset using a trained network.')
 
@@ -106,7 +105,7 @@ def main():
     # Possibly auto-generate the output filename.
     if args.filename is None:
         basename = os.path.basename(args.dataset)
-        args.filename = os.path.splitext(basename)[0] + '_embeddings_viz.h5'
+        args.filename = os.path.splitext(basename)[0] + '_embeddings.h5'
     args.filename = os.path.join(args.experiment_root, args.filename)
 
     # Load the args from the original experiment.
@@ -193,7 +192,7 @@ def main():
     # Overlap producing and consuming.
     dataset = dataset.prefetch(1)
 
-    images, fids, pids = dataset.make_one_shot_iterator().get_next()
+    images, _, _ = dataset.make_one_shot_iterator().get_next()
 
     # Create the model and an embedding head.
     model = import_module('nets.' + args.model_name)
@@ -202,6 +201,7 @@ def main():
     endpoints, body_prefix = model.endpoints(images, is_training=False)
     with tf.name_scope('head'):
         endpoints = head.head(endpoints, args.embedding_dim, is_training=False)
+        atts = [endpoints['attention_mask{}'.format(i)] for i in range(5)]
 
     with h5py.File(args.filename, 'w') as f_out, tf.Session(config=config) as sess:
         # Initialize the network/load the checkpoint.
@@ -212,40 +212,27 @@ def main():
         if not args.quiet:
             print('Restoring from checkpoint: {}'.format(checkpoint))
         tf.train.Saver().restore(sess, checkpoint)
+        
+        _att_masks = [None for _ in range(5)]
 
         # Go ahead and embed the whole dataset, with all augmented versions too.
         emb_storage = np.zeros(
             (len(data_fids) * len(modifiers), args.embedding_dim), np.float32)
-        
-        sorted_map_idx = np.random.choice(1536, 20)
-
         for start_idx in count(step=args.batch_size):
             try:
-                emb, _att_map, _images, _fids, _pids = sess.run([endpoints['emb'], endpoints['attention_mask'], images, fids, pids])
+                # emb = sess.run(endpoints['emb'])
+                _ftrs, _att_masks = sess.run([endpoints['Mixed_7d'], atts])
+                _att_maps = [np.mean(_ftrs, axis=(1, 2))]
+                for _mask in _att_masks:
+                    _enlarge_factor = np.mean(_ftrs) / np.sum(_ftrs * _mask)
+                    _att_maps.append(np.mean(_ftrs * _mask * _enlarge_factor, axis=(1, 2)))
+                refined_ftr = np.max(_att_maps, axis=0)
+                # refined_ftr = np.mean(_att_maps, axis=0)
+                emb = sess.run(endpoints['emb'], feed_dict={endpoints['model_output']:refined_ftr})
                 print('\rEmbedded batch {}-{}/{}'.format(
                         start_idx, start_idx + len(emb), len(emb_storage)), 
                     flush=True, end='')
                 emb_storage[start_idx:start_idx + len(emb)] = emb
-                if not os.path.exists('attention_maps'):
-                    os.mkdir('attention_maps')
-                _fids = [x.decode().split('/')[-1].split('.')[0] for x in _fids]
-                _pids = [x.decode() for x in _pids]
-                for batch_idx in sorted_map_idx:
-                    print('process image {}'.format(_fids[batch_idx]))
-                    cv2.imwrite(os.path.join('attention_maps', '{}_origin.jpg'.format(_fids[batch_idx])), _images[batch_idx].astype(np.uint8))
-                    for att_idx in sorted_map_idx:
-                        normed_map = (_att_map[batch_idx][:, :, att_idx] - np.min(_att_map[batch_idx][:, :, att_idx])) / (np.max(_att_map[batch_idx][:, :, att_idx]) - np.min(_att_map[batch_idx][:, :, att_idx]))
-                        _enlarged = np.expand_dims(cv2.resize(_att_map[batch_idx][:, :, att_idx], (224, 224), interpolation=cv2.INTER_CUBIC), 2)
-                        norm_enlarged = np.expand_dims(cv2.resize(normed_map, (224, 224), interpolation=cv2.INTER_CUBIC), 2)
-                        _masked = _enlarged * _images[batch_idx]
-                        norm_masked = norm_enlarged * _images[batch_idx]
-                        _masked.astype(np.uint8)
-                        # _enlarged = _enlarged * 255
-                        cv2.imwrite(os.path.join('attention_maps', '{}_norm_masked_branch_{}.jpg'.format(_fids[batch_idx], att_idx)), norm_masked.astype(np.uint8))
-                        # cv2.imwrite(os.path.join('attention_maps', '{}_{}_mask_branch_{}.jpg'.format(_pids[batch_idx], _fids[batch_idx], att_idx)), _enlarged.astype(np.uint8))
-                    if start_idx > 20:
-                        sys.exit()
-
             except tf.errors.OutOfRangeError:
                 break  # This just indicates the end of the dataset.
 

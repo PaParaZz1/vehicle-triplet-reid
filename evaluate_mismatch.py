@@ -9,6 +9,7 @@ import json
 import numpy as np
 from sklearn.metrics import average_precision_score
 import tensorflow as tf
+import cv2
 
 import common
 import loss
@@ -17,7 +18,7 @@ import loss
 parser = ArgumentParser(description='Evaluate a ReID embedding.')
 
 parser.add_argument(
-    '--excluder', required=True, choices=('market1501', 'diagonal', 'veri', 'veri_track'),
+    '--excluder', required=True, choices=('market1501', 'diagonal', 'veri'),
     help='Excluder function to mask certain matches. Especially for multi-'
          'camera datasets, one often excludes pictures of the query person from'
          ' the gallery if it is taken from the same camera. The `diagonal`'
@@ -52,7 +53,7 @@ parser.add_argument(
     help='Batch size used during evaluation, adapt based on your memory usage.')
 
 parser.add_argument(
-    '--im2track', action='store_true', default=False)
+    '--mba_viz', action='store_true', default=False)
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -71,18 +72,6 @@ def main():
         query_embs = np.array(f_query['emb'])
     with h5py.File(args.gallery_embeddings, 'r') as f_gallery:
         gallery_embs = np.array(f_gallery['emb'])
-
-    '''
-    if not args.im2track:
-        # random select one image from gallary
-        data_dict = {}
-        for _pid, _fid, idx in zip(gallery_pids, gallery_fids, range(len(gallery_pids))):
-            if _pid not in data_dict.keys():
-                data_dict[_pid] = [[_fid, idx]]
-            else:
-                data_dict[_pid].append([_fid, idx])
-        for key, value in data_dict.items():
-    '''
 
     # Just a quick sanity check that both have the same embedding dimension!
     query_dim = query_embs.shape[1]
@@ -119,7 +108,6 @@ def main():
 
             # Convert the array of objects back to array of strings
             pids, fids = np.array(pids, '|U'), np.array(fids, '|U')
-            # print(pids)
 
             # Compute the pid matches
             pid_matches = gallery_pids[None] == pids[:,None]
@@ -144,14 +132,27 @@ def main():
                     print("This usually means a person only appears once.")
                     print("In this case, it's because of {}.".format(fids[i]))
                     print("I'm excluding this person from eval and carrying on.")
-                    print()
                     continue
 
                 aps.append(ap)
                 # Find the first true match and increment the cmc data from there on.
                 k = np.where(pid_matches[i, np.argsort(distances[i])])[0][0]
-                # print('pid {} | fid {} | match rank {}'.format(pids[i], fids[i], k))
+                mismatch_dir = 'mismatched'
+                img_root = '/data2/wangq/VD1'
+                if not os.path.exists(mismatch_dir):
+                    os.makedirs(mismatch_dir)
+                mismatched_fids = gallery_fids[np.argsort(distances[i])][0:k]
+                fid_num = fids[i].split('.jpg')[0].split('/')[-1]
+                if len(mismatched_fids) > 0:
+                    os.system('cp {} {}'.format(os.path.join(img_root, fids[i]), os.path.join(mismatch_dir, '{}_origin.jpg'.format(fid_num))))
+                for fid_idx in range(len(mismatched_fids)):
+                    sdir = os.path.join(img_root, mismatched_fids[fid_idx])
+                    tdir = os.path.join(mismatch_dir, '{}_rank_{}.jpg'.format(fid_num, fid_idx))
+                    os.system('cp {} {}'.format(sdir, tdir))
+                    if fid_idx > 100: break
                 cmc[k:] += 1
+            if start_idx >= 100: break
+
 
     # Compute the actual cmc and mAP values
     cmc = cmc / len(query_pids)

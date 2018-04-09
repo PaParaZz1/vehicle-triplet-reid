@@ -4,7 +4,7 @@
 # experiment on market1501 in the original paper.
 
 # Shift the arguments so that we can just forward the remainder.
-export CUDA_VISIBLE_DEVICES=0,1,2,3
+export CUDA_VISIBLE_DEVICES=2,3
 
 source ./venv/bin/activate
 
@@ -14,7 +14,7 @@ METRIC='euclidean'
 HEADS='fc1024_inception_MBA_5b_addition_linear'
 BACKBONE='inception'
 TRAIN_PART='total'
-EXPR_NAME='_1.0_1'
+EXPR_NAME='_test'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 if [ ${BACKBONE} == 'resnet_v2_50' ]; then
