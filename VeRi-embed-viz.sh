@@ -1,12 +1,12 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=6
+export CUDA_VISIBLE_DEVICES=5
 source venv/bin/activate
 
-# expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_inception_finetune_2'
-# epoch=50000
-expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_inception_6'
-epoch=260000
+# expr_dir='expr_attention_euclidean_fc1024_MBA_5b_concat_resnet_v2_50_0.05_0'
+# epoch=70000
+expr_dir='expr_attention_euclidean_fc1024_MBA_5b_kl_concat_resnet_v2_50_0.1_0'
+epoch=50000
 
 TYPE="query"
 

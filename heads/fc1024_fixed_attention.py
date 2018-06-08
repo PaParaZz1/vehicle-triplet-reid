@@ -1,9 +1,19 @@
 import tensorflow as tf
 from tensorflow.contrib import slim
+import numpy as np
 
 head_num = 5
 CONSTRAINT_WEIGHT = 1.0
-feature_size = 5
+feature_size = 7
+
+fix_att = [np.zeros((7, 7)) for _ in range(5)]
+fix_att[0][1:6, 1:4] = 1.
+fix_att[1][1:6, 3:6] = 1.
+fix_att[2][1:3, 3:6] = 1.
+fix_att[3][4:6, 3:6] = 1.
+fix_att[4][1:6, 4:7] = 1.
+fix_att = [np.expand_dims(np.expand_dims(x, axis=2), axis=0) for x in fix_att]
+# fix_att = [x[np.newaxis, :, np.newaxis] for x in fix_att]
 
 def head(endpoints, embedding_dim, is_training):
 
@@ -21,26 +31,27 @@ def head(endpoints, embedding_dim, is_training):
             activation_fn=tf.nn.relu,
             normalizer_fn=slim.batch_norm,
             normalizer_params=batch_norm_params):
+
         with slim.arg_scope([slim.batch_norm], **batch_norm_params):
-            # attention_projection = slim.conv2d(endpoints['Mixed_7d'], 512, [1, 1], scope='attention_projection')
             masks = []
             masked_maps = []
             for i in range(head_num):
-                attention_branch_mask = attention_branch(endpoints['Mixed_7d'], i)
-                # attention_branch_mask = attention_branch(attention_projection, i)
-                masks.append(attention_branch_mask)
-                endpoints['attention_mask{}'.format(i)] = attention_branch_mask
-                masked_map = (1 + attention_branch_mask) * endpoints['Mixed_7d']
-                # masked_map = (1 + attention_branch_mask) * attention_projection
+                # attention_branch_mask = attention_branch(endpoints['resnet_v2_50/block4'], i)
+                masks.append(fix_att[i])
+                endpoints['attention_mask{}'.format(i)] = fix_att[i]
+                masked_map = (1 + fix_att[i]) * endpoints['resnet_v2_50/block4']
                 endpoints['attention_map{}'.format(i)] = masked_map
                 masked_maps.append(masked_map)
-
+            endpoints['attention_masks'] = masks
+            
+            '''
             mbd_collect = []
             for i in range(head_num):
                 for j in range(i + 1, head_num):
                     cos_sim = cosine_similarity(masks[i], masks[j], 'constraint_{}{}'.format(i, j))
                     mbd_collect.append(cos_sim)
             endpoints['MBD_Constraint'] = tf.add_n(mbd_collect, name='MBD_Constraint')
+            '''
 
     _masked = tf.add_n(masked_maps, name='added_mask')
     endpoints['masked'] = _masked

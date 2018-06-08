@@ -1,37 +1,49 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=7
+export CUDA_VISIBLE_DEVICES=6
 source venv/bin/activate
-# expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_inception_6'
-# epoch=240000
-# expr_dir='expr_attention_euclidean_fc1024_inception_scratch'
-# epoch=120000
-expr_dir='expr_attention_euclidean_fc1024_MBA_5b_addition_resnet_v2_50_10.0_0'
-epoch=190000
+
+# expr_dir='expr_attention_euclidean_fc1024_fixed_attention_resnet_v2_50_0'
+# epoch=400000
+
+# expr_dir='expr_attention_euclidean_fc1024_MBA_5b_concat_resnet_v2_50_0.05_0'
+# epoch=20000
+
+# expr_dir='expr_attention_euclidean_fc1024_resnet_v2_50_plain_0'
+# epoch=40000
+
+expr_dir='expr_attention_euclidean_fc1024_vgg_MBA_5b_kl_addition_vgg_16_0'
+epoch=12000
+
+# expr_dir='expr_attention_euclidean_fc1024_MBA_5b_addition_resnet_v2_50_0'
+# epoch=210000
+
+# expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_inception_0.01_0'
+# epoch=0
 
 TYPE="query"
 DATASET='_track'
 
-python embed.py \
+python embed_timing.py \
         --experiment_root ./experiments/VeRi/${expr_dir} \
         --dataset data/VeRi${DATASET}/VeRi_${TYPE}.csv \
         --filename VeRi_${TYPE}_${epoch}_embeddings.h5 \
         --checkpoint checkpoint-${epoch} \
-        --flip_augment \
-        --aggregator mean \
-        --batch_size 128
+        --batch_size 1
+#         --flip_augment \
+#         --aggregator mean \
 #         --crop_augment five \
 
 TYPE='test'
 
-python embed.py \
+python embed_timing.py \
         --experiment_root ./experiments/VeRi/${expr_dir} \
         --dataset data/VeRi${DATASET}/VeRi_${TYPE}.csv \
         --filename VeRi_${TYPE}_${epoch}_embeddings.h5 \
         --checkpoint checkpoint-${epoch} \
         --flip_augment \
         --aggregator mean \
-        --batch_size 128
+        --batch_size 1
 #        --crop_augment five \
 
 python ./evaluate.py \
