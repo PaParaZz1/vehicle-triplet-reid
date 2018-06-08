@@ -216,15 +216,32 @@ def main():
         # Go ahead and embed the whole dataset, with all augmented versions too.
         emb_storage = np.zeros(
             (len(data_fids) * len(modifiers), args.embedding_dim), np.float32)
+<<<<<<< HEAD
         for start_idx in count(step=args.batch_size):
             try:
                 emb = sess.run(endpoints['emb'])
+=======
+        time_total = 0.
+        inst_total = 0
+        for start_idx in count(step=args.batch_size):
+            try:
+                start_t = time.time()
+                emb = sess.run(endpoints['emb'])
+                time_p = time.time() - start_t
+                time_total += time_p
+                inst_total += args.batch_size
+                print('Time per emb {}'.format(time_p))
+>>>>>>> f2018e16c1b96a14182faa0e5006c6651c6bd6c7
                 print('\rEmbedded batch {}-{}/{}'.format(
                         start_idx, start_idx + len(emb), len(emb_storage)), 
                     flush=True, end='')
                 emb_storage[start_idx:start_idx + len(emb)] = emb
             except tf.errors.OutOfRangeError:
                 break  # This just indicates the end of the dataset.
+<<<<<<< HEAD
+=======
+        print('average time per image {}'.format(time_total / inst_total))
+>>>>>>> f2018e16c1b96a14182faa0e5006c6651c6bd6c7
 
         print()
         if not args.quiet:

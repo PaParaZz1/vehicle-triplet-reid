@@ -7,15 +7,14 @@
 export CUDA_VISIBLE_DEVICES=0,1,2,4
 
 METRIC='euclidean'
-HEADS='fc1024_MBA_5b_kl_addition'
+HEADS='fc1024_MBA_5b_addition'
 BACKBONE='resnet_v2_50'
-EXPR_NAME='_1'
+EXPR_NAME='_0'
 
 IMAGE_ROOT=/data2/wangq/VD1/ ; shift
 INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
 EXP_ROOT=./experiments/pku-vd/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
 
-# python train_multi_gpu.py \
 python train_mba_multi_gpu.py \
     --initial_checkpoint $INIT_CHECKPT \
     --train_set data/pku-vd/VD1_train.csv \

@@ -1,19 +1,18 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=0,1,2,4
+export CUDA_VISIBLE_DEVICES=4,5
 source ./venv/bin/activate
 
 METRIC='euclidean'
-HEADS='fc1024_inception_MBA_5b_addition'
-BACKBONE='inception'
-EXPR_NAME='_0.01_0'
+HEADS='fc1024'
+BACKBONE='resnet_v2_50'
+EXPR_NAME='_plain_0'
 
 IMAGE_ROOT=/data/wangq/VeRi-776/ ; shift
-# INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
-INIT_CHECKPT=./pretrained_models/inception_v4.ckpt ; shift
+INIT_CHECKPT=./pretrained_models/resnet_v2_50.ckpt ; shift
 EXP_ROOT=./experiments/VeRi/expr_attention_${METRIC}_${HEADS}_${BACKBONE}${EXPR_NAME} ; shift
 
-python train_mba_multi_gpu.py \
+python train_multi_gpu.py \
     --initial_checkpoint $INIT_CHECKPT \
     --train_set data/VeRi_track/VeRi_train.csv \
     --model_name ${BACKBONE} \
@@ -33,10 +32,9 @@ python train_mba_multi_gpu.py \
     --train_iterations 400000 \
     --decay_start_iteration 0 \
     --lr_decay_factor 0.96 \
-    --lr_decay_steps 1000 \
+    --lr_decay_steps 4000 \
     --weight_decay_factor 0.0002 \
     "$@"
     # --resume \
-    # --detailed_logs \
     # --crop_augment \
-
+    # --detailed_logs \

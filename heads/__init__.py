@@ -9,6 +9,8 @@ HEAD_CHOICES = (
     'fc1024_MBA_5b_addition',
     'fc1024_MBA_5b_kl_addition',
     'fc1024_MBA_5b_js_addition',
+    'fc1024_MBA_5b_concat',
+    'fc1024_fixed_attention',
     'fc1024_recurrent_attention',
     'fc1024_recurrent_attention_wstop',
     'fc1024_inception_spatial_attention',
@@ -35,4 +37,6 @@ HEAD_CHOICES = (
     'fc1024_multi-resolution_spatial_attention',
     'fc1024_multi-head_attention',
     'global_pooling_inception_mixed_attention',
+    'fc1024_vgg_MBA_5b_addition',
+    'fc1024_vgg_MBA_5b_kl_addition',
 )

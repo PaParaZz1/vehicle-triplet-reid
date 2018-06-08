@@ -2,8 +2,8 @@ import tensorflow as tf
 from tensorflow.contrib import slim
 
 head_num = 5
-CONSTRAINT_WEIGHT = 1.0
-feature_size = 5
+CONSTRAINT_WEIGHT = 0.1
+feature_size = 7
 
 def head(endpoints, embedding_dim, is_training):
 
@@ -26,11 +26,11 @@ def head(endpoints, embedding_dim, is_training):
             masks = []
             masked_maps = []
             for i in range(head_num):
-                attention_branch_mask = attention_branch(endpoints['Mixed_7d'], i)
+                attention_branch_mask = attention_branch(endpoints['resnet_v2_50/block4'], i)
                 # attention_branch_mask = attention_branch(attention_projection, i)
                 masks.append(attention_branch_mask)
                 endpoints['attention_mask{}'.format(i)] = attention_branch_mask
-                masked_map = (1 + attention_branch_mask) * endpoints['Mixed_7d']
+                masked_map = (1 + attention_branch_mask) * endpoints['resnet_v2_50/block4']
                 # masked_map = (1 + attention_branch_mask) * attention_projection
                 endpoints['attention_map{}'.format(i)] = masked_map
                 masked_maps.append(masked_map)
@@ -43,7 +43,8 @@ def head(endpoints, embedding_dim, is_training):
                     mbd_collect.append(cos_sim)
             endpoints['MBD_Constraint'] = tf.add_n(mbd_collect, name='MBD_Constraint')
 
-    _masked = tf.add_n(masked_maps, name='added_mask')
+    _masked = tf.concat(masked_maps, axis=3, name='concat_mask')
+    # _masked = tf.add_n(masked_maps, name='added_mask')
     endpoints['masked'] = _masked
 
     endpoints['model_output'] = endpoints['global_pool'] = tf.reduce_mean(

@@ -3,7 +3,7 @@ from tensorflow.contrib import slim
 
 head_num = 5
 CONSTRAINT_WEIGHT = 1.0
-feature_size = 5
+feature_size = 7
 
 def head(endpoints, embedding_dim, is_training):
 
@@ -26,22 +26,18 @@ def head(endpoints, embedding_dim, is_training):
             masks = []
             masked_maps = []
             for i in range(head_num):
-                attention_branch_mask = attention_branch(endpoints['Mixed_7d'], i)
+                attention_branch_mask = attention_branch(endpoints['vgg_16/pool5'], i)
                 # attention_branch_mask = attention_branch(attention_projection, i)
                 masks.append(attention_branch_mask)
-                endpoints['attention_mask{}'.format(i)] = attention_branch_mask
-                masked_map = (1 + attention_branch_mask) * endpoints['Mixed_7d']
+                masked_map = (1 + attention_branch_mask) * endpoints['vgg_16/pool5']
                 # masked_map = (1 + attention_branch_mask) * attention_projection
                 endpoints['attention_map{}'.format(i)] = masked_map
                 masked_maps.append(masked_map)
             endpoints['attention_masks'] = masks
 
-            mbd_collect = []
             for i in range(head_num):
                 for j in range(i + 1, head_num):
-                    cos_sim = cosine_similarity(masks[i], masks[j], 'constraint_{}{}'.format(i, j))
-                    mbd_collect.append(cos_sim)
-            endpoints['MBD_Constraint'] = tf.add_n(mbd_collect, name='MBD_Constraint')
+                    cosine_similarity(masks[i], masks[j], 'constraint_{}{}'.format(i, j))
 
     _masked = tf.add_n(masked_maps, name='added_mask')
     endpoints['masked'] = _masked
@@ -84,8 +80,7 @@ def kl_divergence(mask_a, mask_b, prefix):
 def cosine_similarity(mask_a, mask_b, prefix):
     vector_a = tf.reshape(mask_a, [-1, feature_size ** 2], name='{}_vector_a'.format(prefix))
     vector_b = tf.reshape(mask_b, [-1, feature_size ** 2], name='{}_vector_b'.format(prefix))
-    dist_a = tf.divide(vector_a, tf.sqrt(tf.reduce_sum(tf.square(vector_a), 1, keep_dims=True)), name='{}_dist_a'.format(prefix))
-    dist_b = tf.divide(vector_b, tf.sqrt(tf.reduce_sum(tf.square(vector_b), 1, keep_dims=True)), name='{}_dist_b'.format(prefix))
+    dist_a = tf.divide(vector_a, tf.sqrt(tf.reduce_sum(tf.square(vector_a), 1)), name='{}_dist_a'.format(prefix))
+    dist_b = tf.divide(vector_b, tf.sqrt(tf.reduce_sum(tf.square(vector_b), 1)), name='{}_dist_b'.format(prefix))
     cosine_sim = CONSTRAINT_WEIGHT * tf.multiply(dist_a, dist_b, name='{}_cosine_similarity'.format(prefix))
     tf.losses.add_loss(cosine_sim)
-    return cosine_sim

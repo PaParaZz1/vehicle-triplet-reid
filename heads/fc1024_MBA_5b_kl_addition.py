@@ -2,7 +2,11 @@ import tensorflow as tf
 from tensorflow.contrib import slim
 
 head_num = 5
+<<<<<<< HEAD
 CONSTRAINT_WEIGHT = 0.01
+=======
+CONSTRAINT_WEIGHT = 5.0
+>>>>>>> f2018e16c1b96a14182faa0e5006c6651c6bd6c7
 feature_size = 7 
 
 def head(endpoints, embedding_dim, is_training):
@@ -76,11 +80,31 @@ def kl_divergence(mask_a, mask_b, prefix):
     vector_b = tf.reshape(mask_b, [-1, feature_size ** 2], name='{}_vector_b'.format(prefix))
     dist_a = tf.divide(vector_a, tf.reduce_sum(vector_a, 1, keep_dims=True), name='{}_dist_a'.format(prefix))
     dist_b = tf.divide(vector_b, tf.reduce_sum(vector_b, 1, keep_dims=True), name='{}_dist_b'.format(prefix))
+<<<<<<< HEAD
+=======
+    # kl_div_ab = tf.distributions.kl_divergence(dist_a, dist_b, name='{}_kl_div_ab'.format(prefix))
+    # kl_div_ba = tf.distributions.kl_divergence(dist_b, dist_a, name='{}_kl_div_ba'.format(prefix))
+>>>>>>> f2018e16c1b96a14182faa0e5006c6651c6bd6c7
     kl_div_ab = tf.reduce_sum(dist_a * tf.log(dist_a / (dist_b + 1e-6)), name='{}_kl_div_ab'.format(prefix))
     kl_div_ba = tf.reduce_sum(dist_b * tf.log(dist_b / (dist_a + 1e-6)), name='{}_kl_div_ba'.format(prefix))
     kl_div = CONSTRAINT_WEIGHT * (kl_div_ab + kl_div_ba) / 2
     tf.losses.add_loss(kl_div)
     return kl_div
+<<<<<<< HEAD
+=======
+
+def js_divergence(mask_a, mask_b, prefix):
+    vector_a = tf.reshape(mask_a, [-1, feature_size ** 2], name='{}_vector_a'.format(prefix))
+    vector_b = tf.reshape(mask_b, [-1, feature_size ** 2], name='{}_vector_b'.format(prefix))
+    dist_a = tf.divide(vector_a, tf.reduce_sum(vector_a, 1, keep_dims=True), name='{}_dist_a'.format(prefix))
+    dist_b = tf.divide(vector_b, tf.reduce_sum(vector_b, 1, keep_dims=True), name='{}_dist_b'.format(prefix))
+    dist_m = (dist_a + dist_b) / 2
+    kl_div_am = tf.reduce_sum(dist_a * tf.log(dist_a / (dist_m + 1e-6)), name='{}_kl_div_am'.format(prefix))
+    kl_div_bm = tf.reduce_sum(dist_b * tf.log(dist_b / (dist_m + 1e-6)), name='{}_kl_div_bm'.format(prefix))
+    js_div = CONSTRAINT_WEIGHT * (1 - (kl_div_am + kl_div_bm) / 2)
+    tf.losses.add_loss(js_div)
+    return js_div
+>>>>>>> f2018e16c1b96a14182faa0e5006c6651c6bd6c7
     
 def cosine_similarity(mask_a, mask_b, prefix):
     
