@@ -7,6 +7,8 @@ HEAD_CHOICES = (
     'fc1024_spatial_attention',
     'fc1024_spatial_attention_softmax',
     'fc1024_MBA_5b_addition',
+    'fc1024_MBA_5b_kl_addition',
+    'fc1024_MBA_5b_js_addition',
     'fc1024_recurrent_attention',
     'fc1024_recurrent_attention_wstop',
     'fc1024_inception_spatial_attention',

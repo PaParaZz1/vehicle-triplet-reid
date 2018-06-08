@@ -11,9 +11,19 @@ import tensorflow as tf
 
 from aggregators import AGGREGATORS
 import common
-import cv2
 
 parser = ArgumentParser(description='Embed a dataset using a trained network.')
+
+
+# fixed attention maps
+fixed_map = [np.zeros((5, 5)) for _ in range(5)]
+fixed_map[0][0:3, 1:4] = 1.
+fixed_map[1][2:5, 1:4] = 1.
+fixed_map[2][2:5, 0:2] = 1.
+fixed_map[3][2:5, 3:5] = 1.
+fixed_map[4][1:4, 1:4] = 1.
+
+fixed_map = [x[np.newaxis, :, :, np.newaxis] for x in fixed_map]
 
 # Required
 
@@ -98,9 +108,6 @@ def five_crops(image, crop_size):
     bottom_right = image[crop_margin[0]:, crop_margin[1]:]
     return center, top_left, top_right, bottom_left, bottom_right
 
-def im_norm(im):
-    return (im - np.min(im)) / (np.max(im) - np.min(im))
-
 
 def main():
     # Verify that parameters are set correctly.
@@ -109,7 +116,7 @@ def main():
     # Possibly auto-generate the output filename.
     if args.filename is None:
         basename = os.path.basename(args.dataset)
-        args.filename = os.path.splitext(basename)[0] + '_embeddings_viz.h5'
+        args.filename = os.path.splitext(basename)[0] + '_embeddings.h5'
     args.filename = os.path.join(args.experiment_root, args.filename)
 
     # Load the args from the original experiment.
@@ -196,7 +203,7 @@ def main():
     # Overlap producing and consuming.
     dataset = dataset.prefetch(1)
 
-    images, fids, pids = dataset.make_one_shot_iterator().get_next()
+    images, _, _ = dataset.make_one_shot_iterator().get_next()
 
     # Create the model and an embedding head.
     model = import_module('nets.' + args.model_name)
@@ -221,35 +228,16 @@ def main():
             (len(data_fids) * len(modifiers), args.embedding_dim), np.float32)
         for start_idx in count(step=args.batch_size):
             try:
-                emb, _attmaps, _images, _fids, _pids = sess.run([endpoints['emb'], endpoints['attention_masks'], images, fids, pids])
+                _network_output = sess.run(endpoints['Mixed_7d'])
+                _atts = []
+                for att_idx in range(5):
+                    _atts.append(_network_output * fixed_map[att_idx])
+                added_att = np.sum(_atts, axis=0)
+                emb = sess.run(endpoints['emb'], feed_dict={endpoints['masked']:added_att})
                 print('\rEmbedded batch {}-{}/{}'.format(
                         start_idx, start_idx + len(emb), len(emb_storage)), 
                     flush=True, end='')
                 emb_storage[start_idx:start_idx + len(emb)] = emb
-                if not os.path.exists('attention_maps'):
-                    os.mkdir('attention_maps')
-                _fids = [x.decode().split('/')[-1].split('.')[0] for x in _fids]
-                _pids = [x.decode() for x in _pids]
-                for batch_idx in range(len(_attmaps[0])):
-                    img_rgb = cv2.cvtColor(_images[batch_idx].astype(np.uint8), cv2.COLOR_RGB2BGR)
-                    print('process image {}'.format(_fids[batch_idx]))
-                    cv2.imwrite(os.path.join('attention_maps', '{}_origin.jpg'.format(_fids[batch_idx])), img_rgb)
-                    # cv2.imwrite(os.path.join('attention_maps', '{}_origin.jpg'.format(_fids[batch_idx])), _images[batch_idx].astype(np.uint8))
-                    for att_idx in range(len(_attmaps)):
-                        # normed_map = im_norm(_attmaps[att_idx][batch_idx])
-                        # _enlarged = np.expand_dims(cv2.resize(_attmaps[att_idx][batch_idx], (224, 224), interpolation=cv2.INTER_CUBIC), 2)
-                        # norm_enlarged = im_norm(np.expand_dims(cv2.resize(normed_map, (224, 224), interpolation=cv2.INTER_CUBIC), 2))
-                        norm_enlarged = np.expand_dims(cv2.resize(_attmaps[att_idx][batch_idx], (224, 224), interpolation=cv2.INTER_CUBIC), 2)
-                        tmp_enlarged = norm_enlarged * 255
-                        pseudo_enlarged = cv2.applyColorMap(tmp_enlarged.astype(np.uint8), cv2.COLORMAP_JET)
-                        norm_masked = norm_enlarged * img_rgb
-                        pseudo_masked = pseudo_enlarged * 0.5 + img_rgb * 0.5
-                        norm_enlarged = norm_enlarged * 255
-                        cv2.imwrite(os.path.join('attention_maps', '{}_norm_masked_b{}.jpg'.format(_fids[batch_idx], att_idx)), norm_masked.astype(np.uint8))
-                        cv2.imwrite(os.path.join('attention_maps', '{}_pseudo_masked_b{}.jpg'.format(_fids[batch_idx], att_idx)), pseudo_masked.astype(np.uint8))
-                        # cv2.imwrite(os.path.join('attention_maps', '{}_gray_mask_b{}.jpg'.format(_fids[batch_idx], att_idx)), norm_enlarged.astype(np.uint8))
-                        # cv2.imwrite(os.path.join('attention_maps', '{}_pseudo_mask_b{}.jpg'.format(_fids[batch_idx], att_idx)), pseudo_enlarged.astype(np.uint8))
-
             except tf.errors.OutOfRangeError:
                 break  # This just indicates the end of the dataset.
 

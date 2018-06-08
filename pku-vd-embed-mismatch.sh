@@ -4,14 +4,12 @@ export CUDA_VISIBLE_DEVICES=7
 source venv/bin/activate
 
 dataset_size=''
-# epoch=430000
+# epoch=450000
 # expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_inception_1.0_1_finetune_0'
+
 epoch=285886
 expr_dir='ckpt_inception_v4'
 DATASET='VD1'
-# epoch=440000
-# expr_dir='ckpt_MBA_5b_addition_1.0_VD2'
-# DATASET='VD2'
 
 python embed.py \
         --experiment_root ./experiments/pku-vd/${expr_dir} \

@@ -141,27 +141,17 @@ def main():
                 img_root = '/data2/wangq/VD1'
                 if not os.path.exists(mismatch_dir):
                     os.makedirs(mismatch_dir)
-                
-                sorted_fids = gallery_fids[np.argsort(distances[i])]
-                mismatched_fids = sorted_fids[0:k]
-                matched_fid = sorted_fids[k]
-                candidate_fids = sorted_fids[(k+1):(k+11)]
+                mismatched_fids = gallery_fids[np.argsort(distances[i])][0:k]
                 fid_num = fids[i].split('.jpg')[0].split('/')[-1]
-                # if len(mismatched_fids) > 0:
-                #     os.system('cp {} {}'.format(os.path.join(img_root, fids[i]), os.path.join(mismatch_dir, '{}_origin.jpg'.format(fid_num))))
-                os.system('cp {} {}'.format(os.path.join(img_root, fids[i]), os.path.join(mismatch_dir, '{}_origin.jpg'.format(fid_num))))
-                for fid_idx, mm_fid in enumerate(mismatched_fids):
-                    sdir = os.path.join(img_root, mm_fid)
+                if len(mismatched_fids) > 0:
+                    os.system('cp {} {}'.format(os.path.join(img_root, fids[i]), os.path.join(mismatch_dir, '{}_origin.jpg'.format(fid_num))))
+                for fid_idx in range(len(mismatched_fids)):
+                    sdir = os.path.join(img_root, mismatched_fids[fid_idx])
                     tdir = os.path.join(mismatch_dir, '{}_rank_{}.jpg'.format(fid_num, fid_idx))
                     os.system('cp {} {}'.format(sdir, tdir))
-                for fid_idx, c_fid in enumerate(candidate_fids):
-                    sdir = os.path.join(img_root, mm_fid)
-                    tdir = os.path.join(mismatch_dir, '{}_candidate_{}.jpg'.format(fid_num, fid_idx))
-                    os.system('cp {} {}'.format(sdir, tdir))
-                sdir = os.path.join(img_root, matched_fid)
-                tdir = os.path.join(mismatch_dir, '{}_rank_matching.jpg'.format(fid_num))
-                os.system('cp {} {}'.format(sdir, tdir))
+                    # if fid_idx > 100: break
                 cmc[k:] += 1
+            # if start_idx >= 100: break
 
     # Compute the actual cmc and mAP values
     cmc = cmc / len(query_pids)

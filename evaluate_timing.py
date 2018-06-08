@@ -9,16 +9,16 @@ import json
 import numpy as np
 from sklearn.metrics import average_precision_score
 import tensorflow as tf
-import cv2
 
 import common
 import loss
+import time
 
 
 parser = ArgumentParser(description='Evaluate a ReID embedding.')
 
 parser.add_argument(
-    '--excluder', required=True, choices=('market1501', 'diagonal', 'veri'),
+    '--excluder', required=True, choices=('market1501', 'diagonal', 'veri', 'veri_track'),
     help='Excluder function to mask certain matches. Especially for multi-'
          'camera datasets, one often excludes pictures of the query person from'
          ' the gallery if it is taken from the same camera. The `diagonal`'
@@ -53,7 +53,7 @@ parser.add_argument(
     help='Batch size used during evaluation, adapt based on your memory usage.')
 
 parser.add_argument(
-    '--mba_viz', action='store_true', default=False)
+    '--im2track', action='store_true', default=False)
 
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
@@ -72,6 +72,18 @@ def main():
         query_embs = np.array(f_query['emb'])
     with h5py.File(args.gallery_embeddings, 'r') as f_gallery:
         gallery_embs = np.array(f_gallery['emb'])
+
+    '''
+    if not args.im2track:
+        # random select one image from gallary
+        data_dict = {}
+        for _pid, _fid, idx in zip(gallery_pids, gallery_fids, range(len(gallery_pids))):
+            if _pid not in data_dict.keys():
+                data_dict[_pid] = [[_fid, idx]]
+            else:
+                data_dict[_pid].append([_fid, idx])
+        for key, value in data_dict.items():
+    '''
 
     # Just a quick sanity check that both have the same embedding dimension!
     query_dim = query_embs.shape[1]
@@ -96,12 +108,14 @@ def main():
     with tf.Session(config=config) as sess:
         for start_idx in count(step=args.batch_size):
             try:
+                start_t = time.time()
                 # Compute distance to all gallery embeddings
                 distances, pids, fids = sess.run([
                     batch_distances, batch_pids, batch_fids])
                 print('\rEvaluating batch {}-{}/{}'.format(
                         start_idx, start_idx + len(fids), len(query_fids)),
                       flush=True, end='')
+                print('Time per query: {}'.format((time.time() - start_t) / args.batch_size))
             except tf.errors.OutOfRangeError:
                 print()  # Done!
                 break
@@ -132,35 +146,12 @@ def main():
                     print("This usually means a person only appears once.")
                     print("In this case, it's because of {}.".format(fids[i]))
                     print("I'm excluding this person from eval and carrying on.")
+                    print()
                     continue
 
                 aps.append(ap)
                 # Find the first true match and increment the cmc data from there on.
                 k = np.where(pid_matches[i, np.argsort(distances[i])])[0][0]
-                mismatch_dir = 'mismatched'
-                img_root = '/data2/wangq/VD1'
-                if not os.path.exists(mismatch_dir):
-                    os.makedirs(mismatch_dir)
-                
-                sorted_fids = gallery_fids[np.argsort(distances[i])]
-                mismatched_fids = sorted_fids[0:k]
-                matched_fid = sorted_fids[k]
-                candidate_fids = sorted_fids[(k+1):(k+11)]
-                fid_num = fids[i].split('.jpg')[0].split('/')[-1]
-                # if len(mismatched_fids) > 0:
-                #     os.system('cp {} {}'.format(os.path.join(img_root, fids[i]), os.path.join(mismatch_dir, '{}_origin.jpg'.format(fid_num))))
-                os.system('cp {} {}'.format(os.path.join(img_root, fids[i]), os.path.join(mismatch_dir, '{}_origin.jpg'.format(fid_num))))
-                for fid_idx, mm_fid in enumerate(mismatched_fids):
-                    sdir = os.path.join(img_root, mm_fid)
-                    tdir = os.path.join(mismatch_dir, '{}_rank_{}.jpg'.format(fid_num, fid_idx))
-                    os.system('cp {} {}'.format(sdir, tdir))
-                for fid_idx, c_fid in enumerate(candidate_fids):
-                    sdir = os.path.join(img_root, mm_fid)
-                    tdir = os.path.join(mismatch_dir, '{}_candidate_{}.jpg'.format(fid_num, fid_idx))
-                    os.system('cp {} {}'.format(sdir, tdir))
-                sdir = os.path.join(img_root, matched_fid)
-                tdir = os.path.join(mismatch_dir, '{}_rank_matching.jpg'.format(fid_num))
-                os.system('cp {} {}'.format(sdir, tdir))
                 cmc[k:] += 1
 
     # Compute the actual cmc and mAP values

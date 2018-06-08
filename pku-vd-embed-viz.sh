@@ -4,14 +4,11 @@ export CUDA_VISIBLE_DEVICES=7
 source ./venv/bin/activate
 
 dataset_size=''
-# epoch=430000
+# dataset_size='small_'
 # expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_inception_1.0_1_finetune_0'
-# epoch=370000
-# expr_dir='expr_attention_euclidean_fc1024_inception_multi-residual-head_attention_5_branch_inception_10.0_finetune_0'
-# epoch=300000
-# expr_dir='expr_attention_euclidean_fc1024_inception_multi-residual-head_attention_5_branch_inception'
-epoch=280000
-expr_dir='expr_attention_euclidean_fc1024_inception_multi-residual-head_attention_8_branch_inception__finetune_0'
+# epoch=450000
+expr_dir='ckpt_inception_v4'
+epoch=285886
 
 # python embed_mixed_viz.py \
 python embed_viz.py \

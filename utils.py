@@ -17,14 +17,11 @@ def make_parallel(fn, num_gpus, **kwargs):
     in_splits = {}
     for k, v in kwargs.items():
         in_splits[k] = tf.split(v, num_gpus)
-    # print('in_splits {}'.format(in_splits))
 
     out_splits = []
     for i in range(num_gpus):
         with tf.device(tf.DeviceSpec(device_type="GPU", device_index=i)):
             with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
                 out_splits.append(fn(**{k : v[i] for k, v in in_splits.items()}))
-
-    # print('out_splits {}'.format(out_splits))
 
     return tf.concat(out_splits, axis=0)

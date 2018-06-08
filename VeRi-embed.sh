@@ -1,13 +1,16 @@
 #!/bin/sh
 
-export CUDA_VISIBLE_DEVICES=7
+export CUDA_VISIBLE_DEVICES=1
 source venv/bin/activate
-# expr_dir='expr_attention_euclidean_fc1024_inception_MBA_5b_addition_inception_6'
-# epoch=240000
-# expr_dir='expr_attention_euclidean_fc1024_inception_scratch'
-# epoch=120000
-expr_dir='expr_attention_euclidean_fc1024_MBA_5b_addition_resnet_v2_50_10.0_0'
+
+# expr_dir='expr_attention_euclidean_fc1024_MBA_5b_addition_resnet_v2_50_0.1_1'
+# epoch=100000
+
+expr_dir='expr_attention_euclidean_fc1024_MBA_5b_addition_resnet_v2_50_0.0_1'
 epoch=190000
+
+# expr_dir='expr_attention_euclidean_fc1024_MBA_5b_addition_resnet_v2_50_0.01_1'
+# epoch=50000
 
 TYPE="query"
 DATASET='_track'

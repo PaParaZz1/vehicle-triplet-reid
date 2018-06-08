@@ -2,7 +2,7 @@ import tensorflow as tf
 from tensorflow.contrib import slim
 
 head_num = 5
-CONSTRAINT_WEIGHT = 10.0
+CONSTRAINT_WEIGHT = 1.0
 feature_size = 5
 
 def head(endpoints, embedding_dim, is_training):
@@ -34,6 +34,7 @@ def head(endpoints, embedding_dim, is_training):
                 # masked_map = (1 + attention_branch_mask) * attention_projection
                 endpoints['attention_map{}'.format(i)] = masked_map
                 masked_maps.append(masked_map)
+            endpoints['attention_masks'] = masks
 
             for i in range(head_num):
                 for j in range(i + 1, head_num):
