@@ -22,138 +22,6 @@ from heads import HEAD_CHOICES
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 
-parser = ArgumentParser(description='Train a ReID network.')
-
-# Required.
-
-parser.add_argument(
-    '--experiment_root', required=True, type=common.writeable_directory,
-    help='Location used to store checkpoints and dumped data.')
-
-parser.add_argument(
-    '--train_set',
-    help='Path to the train_set csv file.')
-
-parser.add_argument(
-    '--image_root', type=common.readable_directory,
-    help='Path that will be pre-pended to the filenames in the train_set csv.')
-
-# Optional with sane defaults.
-
-parser.add_argument(
-    '--resume', action='store_true', default=False,
-    help='When this flag is provided, all other arguments apart from the '
-         'experiment_root are ignored and a previously saved set of arguments '
-         'is loaded.')
-
-parser.add_argument(
-    '--model_name', default='resnet_v1_50', choices=NET_CHOICES,
-    help='Name of the model to use.')
-
-parser.add_argument(
-    '--head_name', default='fc1024', choices=HEAD_CHOICES,
-    help='Name of the head to use.')
-
-parser.add_argument(
-    '--embedding_dim', default=128, type=common.positive_int,
-    help='Dimensionality of the embedding space.')
-
-parser.add_argument(
-    '--initial_checkpoint', default=None,
-    help='Path to the checkpoint file of the pretrained network.')
-
-# TODO move these defaults to the .sh script?
-parser.add_argument(
-    '--batch_p', default=32, type=common.positive_int,
-    help='The number P used in the PK-batches')
-
-parser.add_argument(
-    '--batch_k', default=4, type=common.positive_int,
-    help='The numberK used in the PK-batches')
-
-parser.add_argument(
-    '--net_input_height', default=256, type=common.positive_int,
-    help='Height of the input directly fed into the network.')
-
-parser.add_argument(
-    '--net_input_width', default=128, type=common.positive_int,
-    help='Width of the input directly fed into the network.')
-
-parser.add_argument(
-    '--pre_crop_height', default=288, type=common.positive_int,
-    help='Height used to resize a loaded image. This is ignored when no crop '
-         'augmentation is applied.')
-
-parser.add_argument(
-    '--pre_crop_width', default=144, type=common.positive_int,
-    help='Width used to resize a loaded image. This is ignored when no crop '
-         'augmentation is applied.')
-# TODO end
-
-parser.add_argument(
-    '--loading_threads', default=8, type=common.positive_int,
-    help='Number of threads used for parallel loading.')
-
-parser.add_argument(
-    '--margin', default='soft', type=common.float_or_string,
-    help='What margin to use: a float value for hard-margin, "soft" for '
-         'soft-margin, or no margin if "none".')
-
-parser.add_argument(
-    '--metric', default='euclidean', choices=loss.cdist.supported_metrics,
-    help='Which metric to use for the distance between embeddings.')
-
-parser.add_argument(
-    '--loss', default='batch_hard', choices=loss.LOSS_CHOICES.keys(),
-    help='Enable the super-mega-advanced top-secret sampling stabilizer.')
-
-parser.add_argument(
-    '--learning_rate', default=3e-4, type=common.positive_float,
-    help='The initial value of the learning-rate, before it kicks in.')
-
-parser.add_argument(
-    '--lr_decay_factor', default=0.96, type=common.positive_float,
-    help='Learning rate decay factor')
-
-parser.add_argument(
-    '--lr_decay_steps', default=4000, type=common.positive_int,
-    help='Learning rate decay steps')
-
-parser.add_argument(
-    '--train_iterations', default=25000, type=common.positive_int,
-    help='Number of training iterations.')
-
-parser.add_argument(
-    '--decay_start_iteration', default=15000, type=int,
-    help='At which iteration the learning-rate decay should kick-in.'
-         'Set to -1 to disable decay completely.')
-
-parser.add_argument(
-    '--weight_decay_factor', default=0.001, type=common.positive_float,
-    help='Weight decay factor')
-
-parser.add_argument(
-    '--checkpoint_frequency', default=1000, type=common.nonnegative_int,
-    help='After how many iterations a checkpoint is stored. Set this to 0 to '
-         'disable intermediate storing. This will result in only one final '
-         'checkpoint.')
-
-parser.add_argument(
-    '--flip_augment', action='store_true', default=False,
-    help='When this flag is provided, flip augmentation is performed.')
-
-parser.add_argument(
-    '--crop_augment', action='store_true', default=False,
-    help='When this flag is provided, crop augmentation is performed. Based on'
-         'The `crop_height` and `crop_width` parameters. Changing this flag '
-         'thus likely changes the network input size!')
-
-parser.add_argument(
-    '--detailed_logs', action='store_true', default=False,
-    help='Store very detailed logs of the training in addition to TensorBoard'
-         ' summaries. These are mem-mapped numpy files containing the'
-         ' embeddings, losses and FIDs seen in each batch during training.'
-         ' Everything can be re-constructed and analyzed that way.')
 
 
 def sample_k_fids_for_pid(pid, all_fids, all_pids, batch_k):
@@ -241,6 +109,11 @@ def main():
         log.error("You did not specify the required `image_root` argument!")
         sys.exit(1)
 
+
+
+
+
+
     # Load the data from the CSV file.
     pids, fids = common.load_dataset(args.train_set, args.image_root)
     max_fid_len = max(map(len, fids))  # We'll need this later for logfiles.
@@ -289,6 +162,14 @@ def main():
 
     # Since we repeat the data infinitely, we only need a one-shot iterator.
     images, fids, pids = dataset.make_one_shot_iterator().get_next()
+
+
+
+
+
+
+
+
 
     # Create the model and an embedding head.
     model = import_module('nets.' + args.model_name)
@@ -449,3 +330,138 @@ def main():
 
 if __name__ == '__main__':
     main()
+if __name == "__main__":
+    parser = ArgumentParser(description='Train a ReID network.')
+
+    # Required.
+
+    parser.add_argument(
+        '--experiment_root', required=True, type=common.writeable_directory,
+        help='Location used to store checkpoints and dumped data.')
+
+    parser.add_argument(
+        '--train_set',
+        help='Path to the train_set csv file.')
+
+    parser.add_argument(
+        '--image_root', type=common.readable_directory,
+        help='Path that will be pre-pended to the filenames in the train_set csv.')
+
+    # Optional with sane defaults.
+
+    parser.add_argument(
+        '--resume', action='store_true', default=False,
+        help='When this flag is provided, all other arguments apart from the '
+             'experiment_root are ignored and a previously saved set of arguments '
+             'is loaded.')
+
+    parser.add_argument(
+        '--model_name', default='resnet_v1_50', choices=NET_CHOICES,
+        help='Name of the model to use.')
+
+    parser.add_argument(
+        '--head_name', default='fc1024', choices=HEAD_CHOICES,
+        help='Name of the head to use.')
+
+    parser.add_argument(
+        '--embedding_dim', default=128, type=common.positive_int,
+        help='Dimensionality of the embedding space.')
+
+    parser.add_argument(
+        '--initial_checkpoint', default=None,
+        help='Path to the checkpoint file of the pretrained network.')
+
+    # TODO move these defaults to the .sh script?
+    parser.add_argument(
+        '--batch_p', default=32, type=common.positive_int,
+        help='The number P used in the PK-batches')
+
+    parser.add_argument(
+        '--batch_k', default=4, type=common.positive_int,
+        help='The numberK used in the PK-batches')
+
+    parser.add_argument(
+        '--net_input_height', default=256, type=common.positive_int,
+        help='Height of the input directly fed into the network.')
+
+    parser.add_argument(
+        '--net_input_width', default=128, type=common.positive_int,
+        help='Width of the input directly fed into the network.')
+
+    parser.add_argument(
+        '--pre_crop_height', default=288, type=common.positive_int,
+        help='Height used to resize a loaded image. This is ignored when no crop '
+             'augmentation is applied.')
+
+    parser.add_argument(
+        '--pre_crop_width', default=144, type=common.positive_int,
+        help='Width used to resize a loaded image. This is ignored when no crop '
+             'augmentation is applied.')
+    # TODO end
+
+    parser.add_argument(
+        '--loading_threads', default=8, type=common.positive_int,
+        help='Number of threads used for parallel loading.')
+
+    parser.add_argument(
+        '--margin', default='soft', type=common.float_or_string,
+        help='What margin to use: a float value for hard-margin, "soft" for '
+             'soft-margin, or no margin if "none".')
+
+    parser.add_argument(
+        '--metric', default='euclidean', choices=loss.cdist.supported_metrics,
+        help='Which metric to use for the distance between embeddings.')
+
+    parser.add_argument(
+        '--loss', default='batch_hard', choices=loss.LOSS_CHOICES.keys(),
+        help='Enable the super-mega-advanced top-secret sampling stabilizer.')
+
+    parser.add_argument(
+        '--learning_rate', default=3e-4, type=common.positive_float,
+        help='The initial value of the learning-rate, before it kicks in.')
+
+    parser.add_argument(
+        '--lr_decay_factor', default=0.96, type=common.positive_float,
+        help='Learning rate decay factor')
+
+    parser.add_argument(
+        '--lr_decay_steps', default=4000, type=common.positive_int,
+        help='Learning rate decay steps')
+
+    parser.add_argument(
+        '--train_iterations', default=25000, type=common.positive_int,
+        help='Number of training iterations.')
+
+    parser.add_argument(
+        '--decay_start_iteration', default=15000, type=int,
+        help='At which iteration the learning-rate decay should kick-in.'
+             'Set to -1 to disable decay completely.')
+
+    parser.add_argument(
+        '--weight_decay_factor', default=0.001, type=common.positive_float,
+        help='Weight decay factor')
+
+    parser.add_argument(
+        '--checkpoint_frequency', default=1000, type=common.nonnegative_int,
+        help='After how many iterations a checkpoint is stored. Set this to 0 to '
+             'disable intermediate storing. This will result in only one final '
+             'checkpoint.')
+
+    parser.add_argument(
+        '--flip_augment', action='store_true', default=False,
+        help='When this flag is provided, flip augmentation is performed.')
+
+    parser.add_argument(
+        '--crop_augment', action='store_true', default=False,
+        help='When this flag is provided, crop augmentation is performed. Based on'
+             'The `crop_height` and `crop_width` parameters. Changing this flag '
+             'thus likely changes the network input size!')
+
+    parser.add_argument(
+        '--detailed_logs', action='store_true', default=False,
+        help='Store very detailed logs of the training in addition to TensorBoard'
+             ' summaries. These are mem-mapped numpy files containing the'
+             ' embeddings, losses and FIDs seen in each batch during training.'
+             ' Everything can be re-constructed and analyzed that way.')
+
+
