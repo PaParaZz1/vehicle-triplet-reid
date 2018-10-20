@@ -27,32 +27,44 @@ class AttentionModule(nn.Module):
         return mask_map, mask
 
 class MultiBranchAttention(nn.Module):
-    def __init__(self, input_dim, pool, branch_number):
+    def __init__(self, input_dim, output_dim, pool, branch_number):
         super(MultiBranchAttention, self).__init__()
         pool_options = ['concat', 'addition']
         if pool is None:
             raise BaseException("not set pool option\n")
         elif pool in pool_options:
             self.pool = pool
-        else
+        else:
             raise BaseException("invalid pool option\n")
 
         self.branch_number = branch_number
         self.multi_attention = {}
         for i in range(self.branch_number):
-            self.multi_attention['attention_branch{}'.format(i)] = AttentionModule(input_dim)    
+            self.multi_attention['attention_branch{}'.format(i)] = AttentionModule(input_dim).cuda()    
+        if self.pool == 'concat':
+            self.fc = nn.Sequential(nn.Linear(input_dim*branch_number, 1024))
+        elif self.pool == 'addition':
+            self.fc = nn.Sequential(
+                        nn.Linear(input_dim, 1024*branch_number),
+                        nn.Linear(1024*branch_number, 1024))
+        self.output = nn.Linear(1024, output_dim)
+
     def forward(self, x):
         multi_mask = []
         multi_mask_map = []
         for i in range(self.branch_number):
-            multi_mask_map[i], multi_mask[i] = self.multi_attention['attention_branch{}'.format(i)](x) 
-        if self.pool = 'concat':
+            item1, item2 = self.multi_attention['attention_branch{}'.format(i)](x) 
+            multi_mask_map.append(item1)
+            multi_mask.append(item2) 
+        if self.pool == 'concat':
             mask_map_pool = torch.cat(multi_mask_map, dim=1)
-        elif self.pool = 'addition':
+        elif self.pool == 'addition':
             mask_map_pool = torch.stack(multi_mask_map, dim=0)
             mask_map_pool = mask_map_pool.sum(0)
-        x = torch.mean(x, dim=3)
+        x = torch.mean(mask_map_pool, dim=3)
         x = torch.mean(x, dim=2)
+        x = self.fc(x)
+        x = self.output(x)
         return x, multi_mask
         
 
@@ -65,6 +77,8 @@ if __name__ == "__main__":
     print("attention module test pass")
 
     # multi attention test
-    multi_model = MultiBranchAttention(128, pool='concat', branch_number=5).cuda()
-    out, _ = multi_model(inputs)
+    multi_model = MultiBranchAttention(128, 128, pool='addition', branch_number=5).cuda()
+    out, multi_mask = multi_model(inputs)
+    print(len(multi_mask))
+    print(multi_mask[0].shape)
     print("multi attention test pass")
