@@ -79,6 +79,4 @@ if __name__ == "__main__":
     # multi attention test
     multi_model = MultiBranchAttention(128, 128, pool='addition', branch_number=5).cuda()
     out, multi_mask = multi_model(inputs)
-    print(len(multi_mask))
-    print(multi_mask[0].shape)
     print("multi attention test pass")
