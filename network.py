@@ -13,3 +13,5 @@ class ReIDNetwork(nn.Module):
         x = self.backbone(x)
         x = self.head(x)
         return x
+if __name__ == "__main__":
+    print("ReIDNetwork test pass")
