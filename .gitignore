@@ -8,7 +8,7 @@ data/
 experiments/*
 pretrained_models/*
 venv/*
-data/*
+
 !data/create_dataset.py
 nets.bak/
 DARQN/
