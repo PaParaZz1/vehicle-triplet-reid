@@ -185,7 +185,7 @@ def resnet50(pretrained=False, is_backbone=False, **kwargs):
     Args:
         pretrained (bool): If True, returns a model pre-trained on ImageNet
     """
-    model = ResNet(Bottleneck, [3, 4, 6, 3], is_backbone, **kwargs)
+    model = ResNet(Bottleneck, [3, 4, 6, 3], is_backbone=is_backbone, **kwargs)
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['resnet50']))
     return model
@@ -213,3 +213,11 @@ def resnet152(pretrained=False, **kwargs):
     if pretrained:
         model.load_state_dict(model_zoo.load_url(model_urls['resnet152']))
     return model
+
+def Iresnet(pretrained=False, is_backbone=False, backbone_type=None, **kwargs):
+    if backbone_type == None:
+        raise BaseException("no concrete backbon type\n")
+    elif backbone_type == 'resnet50':
+        return resnet50(pretrained=pretrained, is_backbone=is_backbone)
+    else:
+        raise NotImplementedError("not implemented backbone type {}\n".format(backbone_type))

@@ -42,12 +42,12 @@ class MultiBranchAttention(nn.Module):
         for i in range(self.branch_number):
             self.multi_attention['attention_branch{}'.format(i)] = AttentionModule(input_dim).cuda()    
         if self.pool == 'concat':
-            self.fc = nn.Sequential(nn.Linear(input_dim*branch_number, 1024))
+            self.fc = nn.Sequential(FCBlockSequential(input_dim*branch_number, 1024, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True))
         elif self.pool == 'addition':
             self.fc = nn.Sequential(
-                        nn.Linear(input_dim, 1024*branch_number),
-                        nn.Linear(1024*branch_number, 1024))
-        self.output = nn.Linear(1024, output_dim)
+                        FCBlockSequential(input_dim, 1024*branch_number, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True),
+                        FCBlockSequential(1024*branch_number, 1024, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True))
+        self.output = FCBlockSequential(1024, output_dim, init_type="xavier", activation=None, use_batchnorm=False)
 
     def forward(self, x):
         multi_mask = []

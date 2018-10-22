@@ -18,6 +18,21 @@ def WeightInitialize(init_type, weight, activation = None):
 		init_type_dict[init_type](weight, activation)
 	else:
 		raise KeyError("Invalid Key:%s" % init_type)
+def FCBlock(in_channels, out_channels, init_type="kaiming", activation=nn.ReLU(), use_batchnorm=False):
+    block_fc = []
+    block_fc.append(nn.Linear(in_channels, out_channels))
+    WeightInitialize(init_type, block_fc[-1].weight, activation)
+    if not activation is None:
+        block_fc.append(activation)
+    if use_batchnorm:
+        block_fc.append(nn.BatchNorm1d(out_channels))
+    return block_fc
+
+
+def FCBlockSequential(in_channels, out_channels, init_type="kaiming", activation=nn.ReLU(), use_batchnorm=False):
+    seq = nn.Sequential(*FCBlock(in_channels, out_channels, init_type, activation, use_batchnorm))
+    seq.out_channels = out_channels
+    return seq
 
 def ConvBlock(in_channels, out_channels, kernel_size, stride = 1, padding = 0, init_type = "kaiming", activation = nn.ReLU(), use_batchnorm = False):
 	block_conv = []
