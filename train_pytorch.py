@@ -57,7 +57,7 @@ if __name__ == '__main__':
 
     parser.add_argument(
         '--batch_k', default=4, type=common.positive_int,
-        help='The numberK used in the PK-batches')
+        help='The number K used in the PK-batches')
 
     parser.add_argument(
         '--net_input_height', default=256, type=common.positive_int,
