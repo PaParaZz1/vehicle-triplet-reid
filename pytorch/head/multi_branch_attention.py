@@ -45,7 +45,7 @@ class MultiBranchAttention(nn.Module):
                         FCBlockSequential(input_dim, 1024, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True))
         elif self.pool == 'addition':
             self.fc = nn.Sequential(FCBlockSequential(input_dim, 1024, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True))
-        self.output = FCBlockSequential(1024, output_dim, init_type="xavier", activation=None, use_batchnorm=False)
+        self.output = FCBlockSequential(1024, output_dim, init_type="orthogonal", activation=None, use_batchnorm=False)
 
     def forward(self, x):
         multi_mask = []

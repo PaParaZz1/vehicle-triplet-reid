@@ -3,7 +3,7 @@ from torch.utils.data import DataLoader
 from torchvision import transforms
 from dataset import VeRiDataset
 
-def create_dataLoader(opt, is_train):
+def create_dataloader(opt, is_train):
     """
     Return the dataloader according to the opt.
     """
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     parser.add_argument('--data_augment',default=True)
     opt = parser.parse_args()
     
-    dataloader = create_dataLoader(opt, True)
+    dataloader = create_dataloader(opt, True)
     idx, (imgs, labels) = next(enumerate(dataloader))
     print(imgs.shape)
     print(labels.shape)

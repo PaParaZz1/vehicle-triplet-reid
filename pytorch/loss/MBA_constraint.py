@@ -10,9 +10,9 @@ class KLLoss(nn.Module):
         self.weight = weight
         self.size_average = size_average
 
-    def kl_divergence(inputs, target):
+    def kl_divergence(inputs, target, size_average):
         log_inputs = torch.log(inputs) 
-        return F.kl_div(log_inputs, target, size_average=False)
+        return F.kl_div(log_inputs, target, size_average=size_average)
         
     def forward(self, multi_mask):
         branch_number = len(multi_mask)

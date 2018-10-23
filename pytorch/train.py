@@ -1,17 +1,69 @@
 from argparse import ArgumentParser
+import os
+import sys
 import common
 
 
 import numpy as np
 import torch
+import torch.nn as nn
 from torch.autograd import Variable
 
+sys.path.append('./data_preprocess')
+sys.path.append('./backbone')
 from backbone import BACKBONE_CHOICES
 from head import HEAD_CHOICES
-from data_processing import create_dataloader
+from data_preprocess.dataloader import create_dataloader
+from network import ReIDNetwork
+from loss.batch_hard import batch_hard_loss
+from loss.MBA_constraint import KLLoss 
 
 def train(opt):
+    if not opt.train_set:
+        raise BaseException("not specify the 'train_set' argument")
+        sys.exit(1)
+    if not opt.image_root:
+        raise BaseException("not specify the 'image_root' argument")
+        sys.exit(1)
+    if not torch.cuda.is_available():
+        raise BaseException("no available GPU, only support for GPU")
+        sys.exit(1)
+
     train_dataloader = create_dataloader(opt, is_train=True)
+    model = ReIDNetwork(opt.backbone_name, opt.head_name, opt.feature_dim, opt.embedding_dim, opt.pool, opt.branch_number).cuda()
+    if torch.cuda.device_count() > 1:
+        model = nn.DataParallel(model)
+    model.train()
+
+    if not opt.initial_checkpoint:
+        model.load_state_dict(torch.load(opt.initial_checkpoint))
+    
+    optimizer = nn.optim.Adam(model.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay_factor)
+    lr_decay_milestones = [x for x in range(opt.decay_start_iteration, opt.train_iterations, opt.lr_decay_steps)]
+    lr_scheduler = nn.optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_decay_milestones, gamma=opt.lr_decay_factor)
+
+    batch_size = opt.batch_p * opt.batch_k 
+    
+    for epoch in range(opt.train_iterations):
+        lr_scheduler.step()
+        for index, data in enumerate(train_dataloader):
+            images, labels = data
+            _, _, c, h, w = images.shape
+            images = images.view(-1, c, h, w)
+            images, labels = Variable(images).cuda(), Variable(labels).cuda()
+            feature, mask = model(images)
+
+            kl_loss = KLLoss(opt.mba_constraint_weight, size_average=False)
+            loss = batch_hard_loss(feature, label, metric=opt.metric, margin=opt.margin) + kl_loss(mask)
+            optimizer.zero_grad()
+            loss.backward()
+            optimizer.step()
+            print('[%d: %d batch] train loss:%f'%(epoch, index, loss.data[0]))
+
+        if epoch % opt.checkpoint_frequency == 0:
+            torch.save(net.state_dict(), "%s/checkpoint_%d.pth"%(opt.experiment_root, epoch))
+    
+    
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='train a vehicle ReID nerwork')
@@ -34,7 +86,7 @@ if __name__ == '__main__':
              'is loaded.')
 
     parser.add_argument(
-        '--backbone_name', default='resnet_50', choices=BACKBONE_CHOICES,
+        '--backbone_name', default='resnet50', choices=BACKBONE_CHOICES,
         help='Name of the backbone to use.')
 
     parser.add_argument(
@@ -42,12 +94,20 @@ if __name__ == '__main__':
         help='Name of the head to use.')
 
     parser.add_argument(
-        '--feature_dim', default=512, type=common.positive_int,
-        help='Dimensionality of the backbone output feature.')
+        '--feature_dim', default=2048, type=common.positive_int,
+        help='Dimensionality of the backbone output feature.This dim must match backbone')
 
     parser.add_argument(
         '--embedding_dim', default=128, type=common.positive_int,
         help='Dimensionality of the embedding space.')
+
+    parser.add_argument(
+        '--pool', default='concat', type=str,
+        help='pool type for multi-branch-attention')
+
+    parser.add_argument(
+        '--branch_number', default=5, type=common.positive_int,
+        help='multi attention branch numbers')
 
     parser.add_argument(
         '--initial_checkpoint', default=None,
@@ -62,21 +122,17 @@ if __name__ == '__main__':
         help='The number K used in the PK-batches')
 
     parser.add_argument(
-        '--net_input_height', default=256, type=common.positive_int,
-        help='Height of the input directly fed into the network.')
+        '--data_augment', default=True, type=bool,
+        help='whether use input data augmentation')
 
     parser.add_argument(
-        '--net_input_width', default=128, type=common.positive_int,
-        help='Width of the input directly fed into the network.')
-
-    parser.add_argument(
-        '--pre_crop_height', default=288, type=common.positive_int,
-        help='Height used to resize a loaded image. This is ignored when no crop '
+        '--resize_height', default=288, type=common.positive_int,
+        help='Height used to resize a loaded image. This is ignored when no data '
              'augmentation is applied.')
 
     parser.add_argument(
-        '--pre_crop_width', default=144, type=common.positive_int,
-        help='Width used to resize a loaded image. This is ignored when no crop '
+        '--resize_width', default=144, type=common.positive_int,
+        help='Width used to resize a loaded image. This is ignored when no data '
              'augmentation is applied.')
 
     parser.add_argument(
@@ -89,11 +145,11 @@ if __name__ == '__main__':
              'soft-margin, or no margin if "none".')
 
     parser.add_argument(
-        '--metric', default='Euclidean', choices=loss.cdist.supported_metrics,
+        '--metric', default='Euclidean', type=str,
         help='Which metric to use for the distance between embeddings.')
 
     parser.add_argument(
-        '--loss', default='batch_hard', choices=loss.LOSS_CHOICES.keys(),
+        '--loss', default='batch_hard', type=str,
         help='Enable the super-mega-advanced top-secret sampling stabilizer.')
 
     parser.add_argument(
@@ -122,20 +178,14 @@ if __name__ == '__main__':
         help='Weight decay factor')
 
     parser.add_argument(
+        '--mba_constraint_weight', default=0.1, type=float,
+        help='mba constraint weight')
+
+    parser.add_argument(
         '--checkpoint_frequency', default=1000, type=common.nonnegative_int,
         help='After how many iterations a checkpoint is stored. Set this to 0 to '
              'disable intermediate storing. This will result in only one final '
              'checkpoint.')
-
-    parser.add_argument(
-        '--flip_augment', action='store_true', default=False,
-        help='When this flag is provided, flip augmentation is performed.')
-
-    parser.add_argument(
-        '--crop_augment', action='store_true', default=False,
-        help='When this flag is provided, crop augmentation is performed. Based on'
-             'The `crop_height` and `crop_width` parameters. Changing this flag '
-             'thus likely changes the network input size!')
 
     parser.add_argument(
         '--detailed_logs', action='store_true', default=False,

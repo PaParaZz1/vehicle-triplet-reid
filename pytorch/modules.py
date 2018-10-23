@@ -1,5 +1,5 @@
 import torch.nn as nn
-from torch.nn.init import xavier_normal, kaiming_normal
+from torch.nn.init import xavier_normal, kaiming_normal, orthogonal
 
 def WeightInitialize(init_type, weight, activation = None):
 	if init_type is None:
@@ -12,8 +12,10 @@ def WeightInitialize(init_type, weight, activation = None):
 			kaiming_normal(weight, a = activation.negative_slope)
 		else:
 			kaiming_normal(weight, a = 0)
+    def OrthogonalInit(weight, activation):
+        orthogonal(weight)
 
-	init_type_dict = {"xavier" : XavierInit, "kaiming" : KaimingInit}
+	init_type_dict = {"xavier" : XavierInit, "kaiming" : KaimingInit, "orthogonal" : OrthogonalInit}
 	if init_type in init_type_dict:
 		init_type_dict[init_type](weight, activation)
 	else:
