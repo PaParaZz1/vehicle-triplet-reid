@@ -17,7 +17,7 @@ import loss
 parser = ArgumentParser(description='Evaluate a ReID embedding.')
 
 parser.add_argument(
-    '--excluder', required=True, choices=('market1501', 'diagonal'),
+    '--excluder', required=True, choices=('market1501', 'diagonal', 'veri', 'veri_track'),
     help='Excluder function to mask certain matches. Especially for multi-'
          'camera datasets, one often excludes pictures of the query person from'
          ' the gallery if it is taken from the same camera. The `diagonal`'
@@ -51,6 +51,9 @@ parser.add_argument(
     '--batch_size', default=256, type=common.positive_int,
     help='Batch size used during evaluation, adapt based on your memory usage.')
 
+parser.add_argument(
+    '--im2track', action='store_true', default=False)
+
 config = tf.ConfigProto()
 config.gpu_options.allow_growth = True
 
@@ -68,6 +71,18 @@ def main():
         query_embs = np.array(f_query['emb'])
     with h5py.File(args.gallery_embeddings, 'r') as f_gallery:
         gallery_embs = np.array(f_gallery['emb'])
+
+    '''
+    if not args.im2track:
+        # random select one image from gallary
+        data_dict = {}
+        for _pid, _fid, idx in zip(gallery_pids, gallery_fids, range(len(gallery_pids))):
+            if _pid not in data_dict.keys():
+                data_dict[_pid] = [[_fid, idx]]
+            else:
+                data_dict[_pid].append([_fid, idx])
+        for key, value in data_dict.items():
+    '''
 
     # Just a quick sanity check that both have the same embedding dimension!
     query_dim = query_embs.shape[1]
@@ -104,6 +119,7 @@ def main():
 
             # Convert the array of objects back to array of strings
             pids, fids = np.array(pids, '|U'), np.array(fids, '|U')
+            # print(pids)
 
             # Compute the pid matches
             pid_matches = gallery_pids[None] == pids[:,None]
@@ -134,6 +150,7 @@ def main():
                 aps.append(ap)
                 # Find the first true match and increment the cmc data from there on.
                 k = np.where(pid_matches[i, np.argsort(distances[i])])[0][0]
+                # print('pid {} | fid {} | match rank {}'.format(pids[i], fids[i], k))
                 cmc[k:] += 1
 
     # Compute the actual cmc and mAP values

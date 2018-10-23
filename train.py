@@ -225,6 +225,8 @@ def main():
     model_variables = tf.get_collection(
         tf.GraphKeys.GLOBAL_VARIABLES, body_prefix)
 
+    model_variables = [x for x in model_variables if 'low_attention' not in x.name]
+
     # Define the optimizer and the learning-rate schedule.
     # Unfortunately, we get NaNs if we don't handle no-decay separately.
     global_step = tf.Variable(0, name='global_step', trainable=False)

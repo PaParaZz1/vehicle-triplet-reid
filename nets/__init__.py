@@ -5,4 +5,6 @@ NET_CHOICES = (
     'resnet_v1_101',
     'resnet_v2_50',
     'inception',
+    'inception_attention',
+    'vgg_16',
 )

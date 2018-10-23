@@ -1,0 +1,3 @@
+HEAD_CHOICES = [
+    "MultiBranchAttention"
+]

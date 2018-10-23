@@ -11,6 +11,7 @@ def head(endpoints, embedding_dim, is_training):
             'is_training': is_training,
             'updates_collections': tf.GraphKeys.UPDATE_OPS,
         })
+        # }, scope='pre_emb')
 
     endpoints['emb'] = endpoints['emb_raw'] = slim.fully_connected(
         endpoints['head_output'], embedding_dim, activation_fn=None,
