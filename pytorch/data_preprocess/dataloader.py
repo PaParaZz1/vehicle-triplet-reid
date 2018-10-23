@@ -38,7 +38,7 @@ if __name__ == '__main__':
     opt = parser.parse_args()
     
     dataloader = create_dataLoader(opt, True)
-    imgs, labels = next(enumerate(dataloader))
+    idx, (imgs, labels) = next(enumerate(dataloader))
     print(imgs.shape)
     print(labels.shape)
     print("test dataloader pass")

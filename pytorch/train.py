@@ -8,8 +8,10 @@ from torch.autograd import Variable
 
 from backbone import BACKBONE_CHOICES
 from head import HEAD_CHOICES
+from data_processing import create_dataloader
 
 def train(opt):
+    train_dataloader = create_dataloader(opt, is_train=True)
 
 if __name__ == '__main__':
     parser = ArgumentParser(description='train a vehicle ReID nerwork')
