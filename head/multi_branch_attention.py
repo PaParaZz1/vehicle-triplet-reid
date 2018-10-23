@@ -15,12 +15,10 @@ class AttentionModule(nn.Module):
     def forward(self, x):
         b, c, h, w = x.shape
         feature = x
-        if h != w:
-            raise BaseException("input feature h not match w\n")
         mask = self.conv1(x)
         mask = self.conv2(mask)
         mask = self.sigmoid(mask)
-        identity = Variable(torch.from_numpy(np.eye(h).astype(np.float32)).repeat(b, 1, 1, 1)).cuda()
+        identity = Variable(torch.ones(h,w).repeat(b, 1, 1, 1)).cuda()
         mask_residual = mask + identity
         mask_residual = mask_residual.repeat(1,c,1,1)
         mask_map = mask_residual * feature
@@ -42,11 +40,11 @@ class MultiBranchAttention(nn.Module):
         for i in range(self.branch_number):
             self.multi_attention['attention_branch{}'.format(i)] = AttentionModule(input_dim).cuda()    
         if self.pool == 'concat':
-            self.fc = nn.Sequential(FCBlockSequential(input_dim*branch_number, 1024, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True))
-        elif self.pool == 'addition':
             self.fc = nn.Sequential(
-                        FCBlockSequential(input_dim, 1024*branch_number, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True),
-                        FCBlockSequential(1024*branch_number, 1024, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True))
+                        FCBlockSequential(input_dim*branch_number, input_dim, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True),
+                        FCBlockSequential(input_dim, 1024, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True))
+        elif self.pool == 'addition':
+            self.fc = nn.Sequential(FCBlockSequential(input_dim, 1024, init_type="xavier", activation=nn.ReLU(), use_batchnorm=True))
         self.output = FCBlockSequential(1024, output_dim, init_type="xavier", activation=None, use_batchnorm=False)
 
     def forward(self, x):
@@ -67,6 +65,13 @@ class MultiBranchAttention(nn.Module):
         x = self.output(x)
         return x, multi_mask
         
+def Ihead(input_dim, output_dim, pool, branch_number, head_type=None):
+    if head_type == None:
+        raise BaseException("not set head type\n")
+    elif head_type == "MultiBranchAttention":
+        return MultiBranchAttention(input_dim, output_dim, pool, branch_number)
+    else:
+        raise NotImplementedError("not implemented head type:{}".format(head_type))
 
 if __name__ == "__main__":
     # attention module test
