@@ -1,6 +1,8 @@
+import numbers
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.autograd import Variable
 
 def pairwise_distance_metric(feature, metric='Euclidean', epsilon=1e-12):
     pair_dot_product = feature.mm(feature.t()) # b x b
@@ -15,15 +17,17 @@ def pairwise_distance_metric(feature, metric='Euclidean', epsilon=1e-12):
     return pair_distance
 
 def get_mask(label, mask_type=None):
-    if mask_type != 'positive' or mask_type != 'negative':
+    if mask_type != 'positive' and mask_type != 'negative':
         raise BaseException("invalid mask type\n")
-    identity = torch.eye(label.shape()[0]).byte()
+    identity = torch.eye(label.shape[0]).byte()
     not_identity = ~identity
+    not_identity = Variable(not_identity).cuda()
 
     if mask_type == 'positive':
         mask = torch.eq(label.unsqueeze(1), label.unsqueeze(0))
     elif mask_type == 'negative':
         mask = torch.ne(label.unsqueeze(1), label.unsqueeze(0))
+    mask = mask.byte()
     mask = mask & not_identity
     return mask
 
@@ -36,7 +40,9 @@ def batch_hard_loss(feature, label, metric, margin, size_average=True):
     
     negative_mask = get_mask(label, 'negative')
     max_distance = distance.max(dim=1)[0]
-    negative_distance = distance + max_distance*((~negative_mask).float())
+    not_negative_mask = ~(negative_mask.data)
+    not_negative_mask = Variable(not_negative_mask)
+    negative_distance = distance + max_distance*(not_negative_mask.float())
     hardest_negative_loss = negative_distance.min(dim=1)[0]
 
     triplet_loss = hardest_positive_loss - hardest_negative_loss

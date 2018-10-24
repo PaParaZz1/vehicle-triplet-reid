@@ -9,8 +9,7 @@ def create_dataloader(opt, is_train):
     """
     if opt.data_augment:
         transform = transforms.Compose([
-            transforms.Resize((100, 100)),     
-            transforms.RandomCrop(96),
+            transforms.Resize((opt.resize_height, opt.resize_width)),     
             transforms.RandomHorizontalFlip(),
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))

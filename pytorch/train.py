@@ -31,16 +31,15 @@ def train(opt):
 
     train_dataloader = create_dataloader(opt, is_train=True)
     model = ReIDNetwork(opt.backbone_name, opt.head_name, opt.feature_dim, opt.embedding_dim, opt.pool, opt.branch_number).cuda()
-    if torch.cuda.device_count() > 1:
-        model = nn.DataParallel(model)
+    #model = nn.DataParallel(model.cuda())
     model.train()
 
-    if not opt.initial_checkpoint:
+    if opt.initial_checkpoint != None:
         model.load_state_dict(torch.load(opt.initial_checkpoint))
     
-    optimizer = nn.optim.Adam(model.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay_factor)
+    optimizer = torch.optim.Adam(model.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay_factor)
     lr_decay_milestones = [x for x in range(opt.decay_start_iteration, opt.train_iterations, opt.lr_decay_steps)]
-    lr_scheduler = nn.optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_decay_milestones, gamma=opt.lr_decay_factor)
+    lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, milestones=lr_decay_milestones, gamma=opt.lr_decay_factor)
 
     batch_size = opt.batch_p * opt.batch_k 
     
@@ -50,18 +49,19 @@ def train(opt):
             images, labels = data
             _, _, c, h, w = images.shape
             images = images.view(-1, c, h, w)
+            labels = labels.view(-1)
             images, labels = Variable(images).cuda(), Variable(labels).cuda()
             feature, mask = model(images)
 
             kl_loss = KLLoss(opt.mba_constraint_weight, size_average=False)
-            loss = batch_hard_loss(feature, label, metric=opt.metric, margin=opt.margin) + kl_loss(mask)
+            loss = batch_hard_loss(feature, labels, metric=opt.metric, margin=opt.margin) + kl_loss(mask)
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
             print('[%d: %d batch] train loss:%f'%(epoch, index, loss.data[0]))
 
         if epoch % opt.checkpoint_frequency == 0:
-            torch.save(net.state_dict(), "%s/checkpoint_%d.pth"%(opt.experiment_root, epoch))
+            torch.save(model.state_dict(), "%s/checkpoint_%d.pth"%(opt.experiment_root, epoch))
     
     
 
@@ -90,7 +90,7 @@ if __name__ == '__main__':
         help='Name of the backbone to use.')
 
     parser.add_argument(
-        '--head_name', default='MultiAttentionBranch', choices=HEAD_CHOICES,
+        '--head_name', default='MultiBranchAttention', choices=HEAD_CHOICES,
         help='Name of the head to use.')
 
     parser.add_argument(

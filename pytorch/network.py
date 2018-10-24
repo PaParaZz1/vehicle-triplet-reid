@@ -16,7 +16,6 @@ class ReIDNetwork(nn.Module):
         
     def forward(self, x):
         x = self.backbone(x)
-        print(x.shape)
         embedding_feature, multi_mask = self.head(x)
         return embedding_feature, multi_mask
 

@@ -12,8 +12,8 @@ def WeightInitialize(init_type, weight, activation = None):
 			kaiming_normal(weight, a = activation.negative_slope)
 		else:
 			kaiming_normal(weight, a = 0)
-    def OrthogonalInit(weight, activation):
-        orthogonal(weight)
+	def OrthogonalInit(weight, activation):
+		orthogonal(weight)
 
 	init_type_dict = {"xavier" : XavierInit, "kaiming" : KaimingInit, "orthogonal" : OrthogonalInit}
 	if init_type in init_type_dict:

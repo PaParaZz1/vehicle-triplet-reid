@@ -1,6 +1,6 @@
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+from torch.autograd import Variable
 
 
 
@@ -10,17 +10,22 @@ class KLLoss(nn.Module):
         self.weight = weight
         self.size_average = size_average
 
-    def kl_divergence(inputs, target, size_average):
+    def kl_divergence(self, inputs, target):
+        inputs = inputs.detach()
+        target = target.detach()
         log_inputs = torch.log(inputs) 
-        return F.kl_div(log_inputs, target, size_average=size_average)
+        criterion = nn.KLDivLoss(size_average=self.size_average)
+        return criterion(log_inputs, target)
         
     def forward(self, multi_mask):
         branch_number = len(multi_mask)
-        kl_loss = None
+        b, c, h, w = multi_mask[0].shape
+        kl_loss = Variable(torch.zeros(b)).cuda()
         for i in range(branch_number):
             for j in range(branch_number):
                 if i == j:
                     continue
                 else:
-                    kl_loss += kl_divergence(multi_mask[i], multi_mask[j], self.size_average)
-        kl_loss *= weight
+                    kl_loss += self.kl_divergence(multi_mask[i], multi_mask[j])
+        kl_loss *= self.weight
+        return kl_loss.mean()
