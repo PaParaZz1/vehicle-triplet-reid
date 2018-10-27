@@ -1,9 +1,9 @@
 import collections
 from torch.utils.data import DataLoader
 from torchvision import transforms
-from dataset import VeRiDataset
+from dataset import VeRiDataset, VeRiTestDataset
 
-def create_dataloader(opt, is_train):
+def create_dataloader(opt, is_train, drop_last=True):
     """
     Return the dataloader according to the opt.
     """
@@ -16,14 +16,18 @@ def create_dataloader(opt, is_train):
         ])
     else:
         transform = transforms.Compose([
-            transforms.Resize((100, 100)),     
+            transforms.Resize((opt.resize_height, opt.resize_width)),     
             transforms.ToTensor(),
             transforms.Normalize(mean=(0.5, 0.5, 0.5), std=(0.5, 0.5, 0.5))
         ])
-    
-    dataset = VeRiDataset(opt, transform, is_train)
-    dataloader = DataLoader(dataset, batch_size=opt.batch_p, shuffle=is_train, num_workers=opt.num_workers, drop_last=True)
-    return dataloader
+    if is_train: 
+        dataset = VeRiDataset(opt, transform, is_train)
+        batch_size = opt.batch_p
+    else:
+        dataset = VeRiTestDataset(opt, transform)
+        batch_size = opt.test_batch_size
+    dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=is_train, num_workers=opt.num_workers, drop_last=drop_last)
+    return dataloader, len(dataset)
 
 if __name__ == '__main__':
     from argparse import ArgumentParser

@@ -28,14 +28,26 @@ def train(opt):
     if not torch.cuda.is_available():
         raise BaseException("no available GPU, only support for GPU")
         sys.exit(1)
+    try:
+        os.makedirs(opt.experiment_root)
+    except OSError:
+        pass
 
-    train_dataloader = create_dataloader(opt, is_train=True)
-    model = ReIDNetwork(opt.backbone_name, opt.head_name, opt.feature_dim, opt.embedding_dim, opt.pool, opt.branch_number).cuda()
-    #model = nn.DataParallel(model.cuda())
-    model.train()
+    train_dataloader, _ = create_dataloader(opt, is_train=True)
+    model = ReIDNetwork(opt.backbone_name, opt.head_name, opt.feature_dim, opt.embedding_dim, opt.pool, opt.branch_number)
+    #model = nn.DataParallel(model)
+    model = model.cuda()
 
     if opt.initial_checkpoint != None:
-        model.load_state_dict(torch.load(opt.initial_checkpoint))
+        from collections import OrderedDict
+        old_state_dict = torch.load(opt.initial_checkpoint)
+        new_state_dict = OrderedDict()
+        for k, v in old_state_dict.items():
+            name = k#'module.' + k
+            new_state_dict[name] = v
+        model.load_state_dict(new_state_dict)
+        print("load model")
+    model.train()
     
     optimizer = torch.optim.Adam(model.parameters(), lr=opt.learning_rate, weight_decay=opt.weight_decay_factor)
     lr_decay_milestones = [x for x in range(opt.decay_start_iteration, opt.train_iterations, opt.lr_decay_steps)]
@@ -53,8 +65,11 @@ def train(opt):
             images, labels = Variable(images).cuda(), Variable(labels).cuda()
             feature, mask = model(images)
 
-            kl_loss = KLLoss(opt.mba_constraint_weight, size_average=False)
-            loss = batch_hard_loss(feature, labels, metric=opt.metric, margin=opt.margin) + kl_loss(mask)
+            kl_loss = KLLoss(opt.mba_constraint_weight, size_average=True)
+            t = kl_loss(mask)
+            print('kl loss{}'.format(t.data[0]))
+            loss = batch_hard_loss(feature, labels, metric=opt.metric, margin=opt.margin)
+            loss += t
             optimizer.zero_grad()
             loss.backward()
             optimizer.step()
@@ -110,7 +125,7 @@ if __name__ == '__main__':
         help='multi attention branch numbers')
 
     parser.add_argument(
-        '--initial_checkpoint', default=None,
+        '--initial_checkpoint', default='save_worker100/checkpoint_1200.pth',
         help='Path to the checkpoint file of the pretrained network.')
 
     parser.add_argument(
@@ -136,7 +151,7 @@ if __name__ == '__main__':
              'augmentation is applied.')
 
     parser.add_argument(
-        '--num_workers', default=8, type=common.positive_int,
+        '--num_workers', default=16, type=common.positive_int,
         help='Number of dataloader workers.')
 
     parser.add_argument(
@@ -153,23 +168,23 @@ if __name__ == '__main__':
         help='Enable the super-mega-advanced top-secret sampling stabilizer.')
 
     parser.add_argument(
-        '--learning_rate', default=3e-4, type=common.positive_float,
+        '--learning_rate', default=1e-4, type=common.positive_float,
         help='The initial value of the learning-rate, before it kicks in.')
 
     parser.add_argument(
-        '--lr_decay_factor', default=0.96, type=common.positive_float,
+        '--lr_decay_factor', default=0.9, type=common.positive_float,
         help='Learning rate decay factor')
 
     parser.add_argument(
-        '--lr_decay_steps', default=4000, type=common.positive_int,
+        '--lr_decay_steps', default=100, type=common.positive_int,
         help='Learning rate decay steps')
 
     parser.add_argument(
-        '--train_iterations', default=25000, type=common.positive_int,
+        '--train_iterations', default=5000, type=common.positive_int,
         help='Number of training iterations.')
 
     parser.add_argument(
-        '--decay_start_iteration', default=15000, type=int,
+        '--decay_start_iteration', default=100, type=int,
         help='At which iteration the learning-rate decay should kick-in.'
              'Set to -1 to disable decay completely.')
 
@@ -178,11 +193,11 @@ if __name__ == '__main__':
         help='Weight decay factor')
 
     parser.add_argument(
-        '--mba_constraint_weight', default=0.1, type=float,
+        '--mba_constraint_weight', default=0.2, type=float,
         help='mba constraint weight')
 
     parser.add_argument(
-        '--checkpoint_frequency', default=1000, type=common.nonnegative_int,
+        '--checkpoint_frequency', default=50, type=common.nonnegative_int,
         help='After how many iterations a checkpoint is stored. Set this to 0 to '
              'disable intermediate storing. This will result in only one final '
              'checkpoint.')

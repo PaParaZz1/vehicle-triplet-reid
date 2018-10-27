@@ -10,7 +10,7 @@ class ReIDNetwork(nn.Module):
     def __init__(self, backbone, head, feature_dim, embedding_dim, pool, branch_number):
         super(ReIDNetwork, self).__init__()
         package_backbone = import_module(BABKBONE)
-        self.backbone = package_backbone.Iresnet(pretrained=True, is_backbone=True, backbone_type=backbone)
+        self.backbone = package_backbone.Iresnet(pretrained=False, is_backbone=True, backbone_type=backbone)
         package_head = import_module(HEAD)
         self.head = package_head.Ihead(feature_dim, embedding_dim, pool, branch_number, head)
         
